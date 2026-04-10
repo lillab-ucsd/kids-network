@@ -1,4 +1,3 @@
-
 const DEMO_PARTICIPANT = "demo";
 
 const PRACTICE_IMAGES = [
@@ -108,77 +107,47 @@ const MAIN_BLOCKS = [
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
 
-/* ---------- Responsive layout ---------- */
+/* ---------- Global layout overrides for jsPsych ---------- */
 
-function getLayoutSizes() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-
-  const maxTaskWidth = Math.min(vw * 0.94, 1100);
-  const maxGridHeight = vh * 0.52;
-
-  const cellFromWidth = Math.floor(maxTaskWidth / GRID_COLS);
-  const cellFromHeight = Math.floor(maxGridHeight / GRID_ROWS);
-
-  const cellSize = Math.max(42, Math.min(cellFromWidth, cellFromHeight, 88));
-
-  const gridWidth = GRID_COLS * cellSize;
-  const gridHeight = GRID_ROWS * cellSize;
-
-  const bottomArea = Math.max(170, Math.min(vh * 0.22, 250));
-  const conflictOffset = Math.max(18, Math.round(cellSize * 0.35));
-  const imgSize = Math.max(48, Math.min(96, Math.round(cellSize * 0.95)));
-
-  return {
-    CELL_SIZE: cellSize,
-    GRID_WIDTH: gridWidth,
-    GRID_HEIGHT: gridHeight,
-    BOTTOM_AREA: bottomArea,
-    CONFLICT_OFFSET: conflictOffset,
-    IMG_SIZE: imgSize
-  };
-}
-
-/* ---------- Inject CSS ---------- */
-
-(function injectTaskStyles() {
+(function injectGlobalOverrides() {
   const style = document.createElement("style");
   style.textContent = `
-    #task-wrapper {
-      margin: 0 auto;
-      text-align: center;
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f7f7f7;
       font-family: Arial, sans-serif;
     }
 
-    #trial-label {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 12px;
+    #jspsych-display-element {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    #task-instructions {
-      font-size: 20px;
-      line-height: 1.45;
-      margin-bottom: 14px;
-      padding: 0 10px;
-    }
-
-    #warning-text {
-      margin-top: 12px;
-      min-height: 30px;
-      font-size: 20px;
-      color: #b00020;
-      font-weight: 500;
+    #jspsych-content {
+      max-width: none !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-sizing: border-box;
     }
 
     .task-btn {
-      font-size: 22px;
-      padding: 12px 26px;
+      font-size: 20px;
+      padding: 10px 22px;
       border-radius: 12px;
       border: 1px solid #888;
       background: #f5f5f5;
       cursor: pointer;
-      margin-top: 10px;
     }
 
     .task-btn:active {
@@ -208,6 +177,39 @@ function getLayoutSizes() {
   document.head.appendChild(style);
 })();
 
+/* ---------- Responsive layout ---------- */
+
+function getLayoutSizes() {
+  const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+  const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+  const maxTaskWidth = Math.min(vw * 0.96, 1180);
+  const maxGridHeight = vh * 0.42;
+
+  const cellFromWidth = Math.floor(maxTaskWidth / GRID_COLS);
+  const cellFromHeight = Math.floor(maxGridHeight / GRID_ROWS);
+
+  const cellSize = Math.max(38, Math.min(cellFromWidth, cellFromHeight, 72));
+
+  const gridWidth = GRID_COLS * cellSize;
+  const gridHeight = GRID_ROWS * cellSize;
+
+  const bottomArea = Math.max(120, Math.min(vh * 0.18, 170));
+  const conflictOffset = Math.max(14, Math.round(cellSize * 0.3));
+  const imgSize = Math.max(42, Math.min(76, Math.round(cellSize * 0.88)));
+
+  return {
+    VIEW_W: vw,
+    VIEW_H: vh,
+    CELL_SIZE: cellSize,
+    GRID_WIDTH: gridWidth,
+    GRID_HEIGHT: gridHeight,
+    BOTTOM_AREA: bottomArea,
+    CONFLICT_OFFSET: conflictOffset,
+    IMG_SIZE: imgSize
+  };
+}
+
 /* ---------- Utility functions ---------- */
 
 function getStartPositions(numImages, layout) {
@@ -216,12 +218,11 @@ function getStartPositions(numImages, layout) {
   const cols = 6;
   const rows = Math.ceil(numImages / cols);
 
-  const spacingX = Math.min(140, GRID_WIDTH / 6.5);
-  const spacingY = Math.min(120, Math.max(75, BOTTOM_AREA / Math.max(rows + 0.3, 1)));
+  const spacingX = GRID_WIDTH / cols;
+  const spacingY = Math.min(70, BOTTOM_AREA / rows);
 
-  const totalWidth = spacingX * (cols - 1);
-  const startX = (GRID_WIDTH - totalWidth) / 2;
-  const startY = GRID_HEIGHT + Math.max(36, spacingY * 0.65);
+  const startX = spacingX / 2;
+  const startY = GRID_HEIGHT + Math.max(28, spacingY * 0.55);
 
   const positions = [];
 
@@ -372,20 +373,43 @@ class EmotionGridPlugin {
         : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
 
     display_element.innerHTML = `
-      <div id="task-wrapper" style="max-width:${GRID_WIDTH + 40}px;">
-        <div id="trial-label">${trialLabel}</div>
-        <div id="task-instructions">
+      <div id="task-wrapper" style="
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 8px 10px 12px 10px;
+        overflow: hidden;
+      ">
+        <div id="trial-label" style="
+          font-size: 22px;
+          font-weight: 600;
+          margin-bottom: 8px;
+        ">
+          ${trialLabel}
+        </div>
+
+        <div id="task-instructions" style="
+          font-size: 18px;
+          line-height: 1.35;
+          margin-bottom: 8px;
+          max-width: ${GRID_WIDTH + 40}px;
+          text-align: center;
+        ">
           Drag all ${trialImages.length} pictures into the grid.<br>
           Only one picture can occupy each square.<br>
           Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
         </div>
+
         <div
           id="grid-container"
           style="
             position: relative;
             width: ${GRID_WIDTH}px;
             height: ${GRID_HEIGHT + BOTTOM_AREA}px;
-            margin: 0 auto;
             border: 2px solid #444;
             background: white;
             touch-action: none;
@@ -394,10 +418,19 @@ class EmotionGridPlugin {
             overflow: hidden;
           "
         ></div>
-        <div id="warning-text"></div>
-        <div>
-          <button id="continue-btn" class="task-btn">Continue</button>
-        </div>
+
+        <div id="warning-text" style="
+          margin-top: 8px;
+          min-height: 26px;
+          font-size: 18px;
+          color: #b00020;
+          font-weight: 500;
+          text-align: center;
+        "></div>
+
+        <button id="continue-btn" class="task-btn" style="margin-top: 4px;">
+          Continue
+        </button>
       </div>
     `;
 
@@ -509,8 +542,7 @@ class EmotionGridPlugin {
         dragState = {
           index,
           offsetX: clientX - imgRect.left - imgRect.width / 2,
-          offsetY: clientY - imgRect.top - imgRect.height / 2,
-          pointerId: null
+          offsetY: clientY - imgRect.top - imgRect.height / 2
         };
         el.classList.add("dragging");
       };
@@ -521,7 +553,6 @@ class EmotionGridPlugin {
           el.setPointerCapture(e.pointerId);
         }
         startDrag(e.clientX, e.clientY);
-        dragState.pointerId = e.pointerId;
       });
 
       el.addEventListener("pointermove", (e) => {
@@ -631,7 +662,7 @@ EmotionGridPlugin.info = {
 
 const jsPsychInstance = initJsPsych({
   on_finish: function() {
-    // no auto download
+    // No auto-download. Manual download at end.
   }
 });
 
@@ -645,23 +676,12 @@ const preload_trial = {
   images: allImagesToPreload
 };
 
-const fullscreen_trial = {
-  type: jsPsychFullscreen,
-  fullscreen_mode: true,
-  message: `
-    <div style="font-size:24px; line-height:1.6; max-width:900px; margin:auto;">
-      <p>This task works best in <b>full screen</b> and <b>landscape orientation</b>.</p>
-      <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
-      <p>Tap the button below to enter full screen.</p>
-    </div>
-  `,
-  button_label: "Enter Full Screen"
-};
-
 const intro_trial = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:24px; line-height:1.6; max-width:1000px; margin:auto;">
+    <div style="font-size:22px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
+      <p><b>This task works best in landscape orientation.</b></p>
+      <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
       <p>This is a demo version.</p>
       <p>You will first complete <b>1 practice trial</b>.</p>
       <p>After that, you will complete <b>2 blocks</b> of trials.</p>
@@ -678,7 +698,7 @@ const intro_trial = {
 const practice_intro = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:26px; line-height:1.6;">
+    <div style="font-size:24px; line-height:1.5; padding:20px;">
       Practice Trial<br><br>
       Tap below to begin.
     </div>
@@ -698,7 +718,7 @@ const practice_trial = {
 const main_intro = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:26px; line-height:1.6;">
+    <div style="font-size:24px; line-height:1.5; padding:20px;">
       The practice trial is complete.<br><br>
       You will now begin the main task.<br><br>
       There are <b>2 blocks</b>, with <b>3 trials per block</b>.<br><br>
@@ -710,7 +730,6 @@ const main_intro = {
 
 const timeline = [
   preload_trial,
-  fullscreen_trial,
   intro_trial,
   practice_intro,
   practice_trial,
@@ -723,7 +742,7 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
   timeline.push({
     type: jsPsychHtmlButtonResponse,
     stimulus: `
-      <div style="font-size:26px; line-height:1.6;">
+      <div style="font-size:24px; line-height:1.5; padding:20px;">
         Block ${b + 1} of ${NUM_BLOCKS}<br><br>
         This block has ${TRIALS_PER_BLOCK} trials.<br><br>
         Tap below to begin.
@@ -750,14 +769,9 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
 }
 
 timeline.push({
-  type: jsPsychFullscreen,
-  fullscreen_mode: false
-});
-
-timeline.push({
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:28px; line-height:1.6; max-width:900px; margin:auto;">
+    <div style="font-size:26px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
       Done. Thank you!<br><br>
       Tap <b>Download CSV</b> below to save your data.<br><br>
       Then tap <b>Finish</b>.
