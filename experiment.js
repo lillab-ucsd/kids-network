@@ -1,8 +1,15 @@
 /*************************************************
- * KIDS SEMANTIC NETWORK DEMO
+ * KIDS SEMANTIC NETWORK DEMO - iPad friendly
  * 1 practice trial + 2 blocks
  * 3 trials per block
  * 12 images per main trial
+ *
+ * Changes for iPad:
+ * - All "press any key" screens -> button response screens
+ * - "Press N to continue" -> Continue button
+ * - Removed keyboard dependency
+ * - Added touch-friendly CSS
+ * - End screen includes a manual CSV download button
  *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
@@ -23,105 +30,198 @@ const TOTAL_MAIN_TRIALS = NUM_BLOCKS * TRIALS_PER_BLOCK;
 const MAIN_BLOCKS = [
   [
     [
-      "stimuli/animals/peacock_1.jpg", 
-      "stimuli/animals/dolphin_1.jpg", 
-      "stimuli/animals/pigeon_1.jpg", 
-      "stimuli/animals/fox_1.jpg", 
-      "stimuli/animals/lion_1.jpg", 
+      "stimuli/animals/peacock_1.jpg",
+      "stimuli/animals/dolphin_1.jpg",
+      "stimuli/animals/pigeon_1.jpg",
+      "stimuli/animals/fox_1.jpg",
+      "stimuli/animals/lion_1.jpg",
       "stimuli/animals/sheep_1.jpg",
-      "stimuli/animals/horse_1.jpg", 
-      "stimuli/animals/fish_1.jpg", 
-      "stimuli/animals/squirrel_1.jpg", 
-      "stimuli/animals/butterfly_1.jpg", 
-      "stimuli/animals/ladybug_1.jpg", 
+      "stimuli/animals/horse_1.jpg",
+      "stimuli/animals/fish_1.jpg",
+      "stimuli/animals/squirrel_1.jpg",
+      "stimuli/animals/butterfly_1.jpg",
+      "stimuli/animals/ladybug_1.jpg",
       "stimuli/animals/wolf_1.jpg"
     ],
-
     [
-      "stimuli/artifact/clock_1.jpg", 
-      "stimuli/artifact/envelope_1.jpg", 
-      "stimuli/artifact/fireworks_1.jpg", 
-      "stimuli/artifact/flag_1.jpg", 
-      "stimuli/artifact/ladder_1.jpg", 
+      "stimuli/artifact/clock_1.jpg",
+      "stimuli/artifact/envelope_1.jpg",
+      "stimuli/artifact/fireworks_1.jpg",
+      "stimuli/artifact/flag_1.jpg",
+      "stimuli/artifact/ladder_1.jpg",
       "stimuli/artifact/mirror_1.jpg",
-      "stimuli/artifact/snowman_1.jpg", 
-      "stimuli/artifact/tent_1.jpg", 
-      "stimuli/artifact/window_1.jpg", 
-      "stimuli/artifact/balloon_1.jpg", 
-      "stimuli/artifact/camera_1.jpg", 
+      "stimuli/artifact/snowman_1.jpg",
+      "stimuli/artifact/tent_1.jpg",
+      "stimuli/artifact/window_1.jpg",
+      "stimuli/artifact/balloon_1.jpg",
+      "stimuli/artifact/camera_1.jpg",
       "stimuli/artifact/candle_1.jpg"
     ],
     [
-       "stimuli/plants/broccoli_1.jpg", 
-      "stimuli/plants/cabbage_1.jpg", 
-      "stimuli/plants/cactus_1.jpg", 
-      "stimuli/plants/cherry_1.jpg", 
-      "stimuli/plants/flower_1.jpg", 
+      "stimuli/plants/broccoli_1.jpg",
+      "stimuli/plants/cabbage_1.jpg",
+      "stimuli/plants/cactus_1.jpg",
+      "stimuli/plants/cherry_1.jpg",
+      "stimuli/plants/flower_1.jpg",
       "stimuli/plants/grass_1.jpg",
-      "stimuli/plants/leaf_1.jpg", 
-      "stimuli/plants/tree_1.jpg", 
-      "stimuli/plants/acorn_1.jpg", 
-      "stimuli/plants/apple_1.jpg", 
-      "stimuli/plants/blueberry_1.jpg", 
+      "stimuli/plants/leaf_1.jpg",
+      "stimuli/plants/tree_1.jpg",
+      "stimuli/plants/acorn_1.jpg",
+      "stimuli/plants/apple_1.jpg",
+      "stimuli/plants/blueberry_1.jpg",
       "stimuli/plants/peanut_1.jpg"
     ]
   ],
   [
     [
-      "stimuli/animals/peacock_2.jpg", 
-      "stimuli/animals/dolphin_2.jpg", 
-      "stimuli/animals/pigeon_2.jpg", 
-      "stimuli/animals/fox_2.jpg", 
-      "stimuli/animals/lion_2.jpg", 
+      "stimuli/animals/peacock_2.jpg",
+      "stimuli/animals/dolphin_2.jpg",
+      "stimuli/animals/pigeon_2.jpg",
+      "stimuli/animals/fox_2.jpg",
+      "stimuli/animals/lion_2.jpg",
       "stimuli/animals/sheep_2.jpg",
-      "stimuli/animals/horse_2.jpg", 
-      "stimuli/animals/fish_2.jpg", 
-      "stimuli/animals/squirrel_2.jpg", 
-      "stimuli/animals/butterfly_2.jpg", 
-      "stimuli/animals/ladybug_2.jpg", 
+      "stimuli/animals/horse_2.jpg",
+      "stimuli/animals/fish_2.jpg",
+      "stimuli/animals/squirrel_2.jpg",
+      "stimuli/animals/butterfly_2.jpg",
+      "stimuli/animals/ladybug_2.jpg",
       "stimuli/animals/wolf_2.jpg"
     ],
     [
-      "stimuli/artifact/clock_2.jpg", 
-      "stimuli/artifact/envelope_2.jpg", 
-      "stimuli/artifact/fireworks_2.jpg", 
-      "stimuli/artifact/flag_2.jpg", 
-      "stimuli/artifact/ladder_2.jpg", 
+      "stimuli/artifact/clock_2.jpg",
+      "stimuli/artifact/envelope_2.jpg",
+      "stimuli/artifact/fireworks_2.jpg",
+      "stimuli/artifact/flag_2.jpg",
+      "stimuli/artifact/ladder_2.jpg",
       "stimuli/artifact/mirror_2.jpg",
-      "stimuli/artifact/snowman_2.jpg", 
-      "stimuli/artifact/tent_2.jpg", 
-      "stimuli/artifact/window_2.jpg", 
-      "stimuli/artifact/balloon_2.jpg", 
-      "stimuli/artifact/camera_2.jpg", 
+      "stimuli/artifact/snowman_2.jpg",
+      "stimuli/artifact/tent_2.jpg",
+      "stimuli/artifact/window_2.jpg",
+      "stimuli/artifact/balloon_2.jpg",
+      "stimuli/artifact/camera_2.jpg",
       "stimuli/artifact/candle_2.jpg"
     ],
     [
-      "stimuli/plants/broccoli_2.jpg", 
-      "stimuli/plants/cabbage_2.jpg", 
-      "stimuli/plants/cactus_2.jpg", 
-      "stimuli/plants/cherry_2.jpg", 
-      "stimuli/plants/flower_2.jpg", 
+      "stimuli/plants/broccoli_2.jpg",
+      "stimuli/plants/cabbage_2.jpg",
+      "stimuli/plants/cactus_2.jpg",
+      "stimuli/plants/cherry_2.jpg",
+      "stimuli/plants/flower_2.jpg",
       "stimuli/plants/grass_2.jpg",
-      "stimuli/plants/leaf_2.jpg", 
-      "stimuli/plants/tree_2.jpg", 
-      "stimuli/plants/acorn_2.jpg", 
-      "stimuli/plants/apple_2.jpg", 
-      "stimuli/plants/blueberry_2.jpg", 
+      "stimuli/plants/leaf_2.jpg",
+      "stimuli/plants/tree_2.jpg",
+      "stimuli/plants/acorn_2.jpg",
+      "stimuli/plants/apple_2.jpg",
+      "stimuli/plants/blueberry_2.jpg",
       "stimuli/plants/peanut_2.jpg"
+    ]
   ]
-]
 ];
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
 const CELL_SIZE = 90;
-
-const SMALL_SIZE = 80;
-const BIG_SIZE = 120;
 const CONFLICT_OFFSET = 50;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
+
+/* ---------- Touch-friendly CSS ---------- */
+(function injectTaskStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    #task-wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+      font-family: Arial, sans-serif;
+    }
+
+    #trial-label {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    #task-instructions {
+      font-size: 22px;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    #grid-container {
+      position: relative;
+      width: ${GRID_WIDTH}px;
+      height: ${GRID_HEIGHT + 320}px;
+      margin: 0 auto;
+      border: 2px solid #444;
+      background: white;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    .grid-line-v,
+    .grid-line-h {
+      position: absolute;
+      background: #d0d0d0;
+      pointer-events: none;
+    }
+
+    .grid-line-v {
+      top: 0;
+      width: 2px;
+      height: ${GRID_HEIGHT}px;
+    }
+
+    .grid-line-h {
+      left: 0;
+      height: 2px;
+      width: ${GRID_WIDTH}px;
+    }
+
+    .stim-img {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      transform: translate(-50%, -50%);
+      touch-action: none;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+
+    .stim-img.dragging {
+      z-index: 9999;
+    }
+
+    #warning-text {
+      margin-top: 12px;
+      min-height: 32px;
+      font-size: 22px;
+      color: #b00020;
+      font-weight: 500;
+    }
+
+    .task-btn {
+      font-size: 24px;
+      padding: 14px 30px;
+      border-radius: 12px;
+      border: 1px solid #888;
+      background: #f5f5f5;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .task-btn:active {
+      transform: scale(0.98);
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+/* ---------- Utility functions ---------- */
 
 function getStartPositions(numImages) {
   const cols = 6;
@@ -138,7 +238,6 @@ function getStartPositions(numImages) {
   for (let i = 0; i < numImages; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-
     positions.push([
       startX + col * spacingX,
       startY + row * spacingY
@@ -216,11 +315,11 @@ function offsetFromQuadrant(x, y) {
   return [x + CONFLICT_OFFSET, y + CONFLICT_OFFSET];
 }
 
-function downloadCSV(filename, rows) {
-  if (!rows.length) return;
+function makeCSVContent(rows) {
+  if (!rows.length) return "";
 
   const headers = Object.keys(rows[0]);
-  const csv = [
+  return [
     headers.join(","),
     ...rows.map(row =>
       headers.map(h => {
@@ -230,7 +329,12 @@ function downloadCSV(filename, rows) {
       }).join(",")
     )
   ].join("\n");
+}
 
+function downloadCSV(filename, rows) {
+  if (!rows.length) return;
+
+  const csv = makeCSVContent(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
 
@@ -240,8 +344,11 @@ function downloadCSV(filename, rows) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/* ---------- Custom plugin ---------- */
 
 class EmotionGridPlugin {
   constructor(jsPsych) {
@@ -274,21 +381,23 @@ class EmotionGridPlugin {
 
     display_element.innerHTML = `
       <div id="task-wrapper">
-        <div id="trial-label">
-          ${trialLabel}
-        </div>
+        <div id="trial-label">${trialLabel}</div>
         <div id="task-instructions">
           Drag all ${trialImages.length} pictures into the grid.<br>
           Only one picture can occupy each square.<br>
-          Press <b>N</b> when all ${trialImages.length} pictures are placed.
+          Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
         </div>
         <div id="grid-container"></div>
         <div id="warning-text"></div>
+        <div>
+          <button id="continue-btn" class="task-btn">Continue</button>
+        </div>
       </div>
     `;
 
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
+    const continueBtn = display_element.querySelector("#continue-btn");
 
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
@@ -305,7 +414,6 @@ class EmotionGridPlugin {
     }
 
     const getRect = () => container.getBoundingClientRect();
-
     const startPositions = getStartPositions(trialImages.length);
 
     imageState.forEach((item, i) => {
@@ -351,6 +459,7 @@ class EmotionGridPlugin {
         el.className = "stim-img";
         el.src = item.path;
         el.dataset.index = index;
+        el.draggable = false;
 
         const [left, top] = centerCoordsToPx(item.centerPos[0], item.centerPos[1], rect);
         el.style.left = `${left}px`;
@@ -386,15 +495,19 @@ class EmotionGridPlugin {
         dragState = {
           index,
           offsetX: clientX - imgRect.left - imgRect.width / 2,
-          offsetY: clientY - imgRect.top - imgRect.height / 2
+          offsetY: clientY - imgRect.top - imgRect.height / 2,
+          pointerId: null
         };
         el.classList.add("dragging");
       };
 
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        el.setPointerCapture(e.pointerId);
+        if (el.setPointerCapture) {
+          el.setPointerCapture(e.pointerId);
+        }
         startDrag(e.clientX, e.clientY);
+        dragState.pointerId = e.pointerId;
       });
 
       el.addEventListener("pointermove", (e) => {
@@ -405,7 +518,7 @@ class EmotionGridPlugin {
         let top = e.clientY - rect.top - dragState.offsetY;
 
         left = clamp(left, 0, rect.width);
-        top = clamp(top, 0, rect.height + 320);
+        top = clamp(top, 0, rect.height);
 
         imageState[index].centerPos = pxToCenterCoords(left, top, rect);
         updateOnePosition(index);
@@ -452,52 +565,41 @@ class EmotionGridPlugin {
       el.addEventListener("pointercancel", finishDrag);
     }
 
-    const keyHandler = (e) => {
-      const key = e.key.toLowerCase();
-
-      if (key === "n") {
-        if (!allPlacedInUniqueSquares()) {
-          warningMessage = `Place all ${trialImages.length} pictures into different grid squares first.`;
-          renderImages();
-          return;
-        }
-
-        imageState.forEach(item => {
-          item.centerPos = getSnappedOrNull(item.centerPos);
-        });
-
-        const placements = imageState.map(item => ({
-          participant,
-          phase,
-          block: blockNumber,
-          trial: trialNumber,
-          trial_in_block: trialNumberInBlock,
-          image: getFileName(item.path),
-          final_img_pos: `(${Math.round(item.centerPos[0])}, ${Math.round(item.centerPos[1])})`,
-          posX: Math.round(item.centerPos[0]),
-          posY: Math.round(item.centerPos[1])
-        }));
-
-        document.removeEventListener("keydown", keyHandler);
-        display_element.innerHTML = "";
-
-        this.jsPsych.finishTrial({
-          participant,
-          phase,
-          block: blockNumber,
-          trial: trialNumber,
-          trial_in_block: trialNumberInBlock,
-          placements
-        });
+    continueBtn.addEventListener("click", () => {
+      if (!allPlacedInUniqueSquares()) {
+        warningMessage = `Place all ${trialImages.length} pictures into different grid squares first.`;
+        renderImages();
+        return;
       }
 
-      if (key === "escape") {
-        document.removeEventListener("keydown", keyHandler);
-        this.jsPsych.endExperiment("Experiment ended.");
-      }
-    };
+      imageState.forEach(item => {
+        item.centerPos = getSnappedOrNull(item.centerPos);
+      });
 
-    document.addEventListener("keydown", keyHandler);
+      const placements = imageState.map(item => ({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        trial_in_block: trialNumberInBlock,
+        image: getFileName(item.path),
+        final_img_pos: `(${Math.round(item.centerPos[0])}, ${Math.round(item.centerPos[1])})`,
+        posX: Math.round(item.centerPos[0]),
+        posY: Math.round(item.centerPos[1])
+      }));
+
+      display_element.innerHTML = "";
+
+      this.jsPsych.finishTrial({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        trial_in_block: trialNumberInBlock,
+        placements
+      });
+    });
+
     renderImages();
   }
 }
@@ -507,19 +609,12 @@ EmotionGridPlugin.info = {
   parameters: {}
 };
 
+/* ---------- jsPsych setup ---------- */
+
 const jsPsychInstance = initJsPsych({
   on_finish: function() {
-    const rows = [];
-
-    jsPsychInstance.data.get().values().forEach(d => {
-      if (d.placements) {
-        d.placements.forEach(row => rows.push(row));
-      }
-    });
-
-    if (rows.length > 0) {
-      downloadCSV(`${DEMO_PARTICIPANT}_emotion_grid_demo.csv`, rows);
-    }
+    // No auto-download here.
+    // We'll let the end screen handle downloading with a button.
   }
 });
 
@@ -534,7 +629,7 @@ const preload_trial = {
 };
 
 const intro_trial = {
-  type: jsPsychHtmlKeyboardResponse,
+  type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:24px; line-height:1.6; max-width:1000px; margin:auto;">
       <p>This is a demo version.</p>
@@ -544,20 +639,21 @@ const intro_trial = {
       <p>On each main trial, <b>12 pictures</b> will appear below the grid.</p>
       <p>Drag each picture into the grid and arrange them however you think is best.</p>
       <p>All pictures must end up inside the grid, and each square can hold only one picture.</p>
-      <p>When all pictures are placed, press <b>N</b> to continue.</p>
-      <p>Press any key to begin.</p>
+      <p>When all pictures are placed, tap <b>Continue</b> to move on.</p>
     </div>
-  `
+  `,
+  choices: ["Begin"]
 };
 
 const practice_intro = {
-  type: jsPsychHtmlKeyboardResponse,
+  type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:26px; line-height:1.6;">
       Practice Trial<br><br>
-      Press any key to begin.
+      Tap below to begin.
     </div>
-  `
+  `,
+  choices: ["Start Practice"]
 };
 
 const practice_trial = {
@@ -570,15 +666,16 @@ const practice_trial = {
 };
 
 const main_intro = {
-  type: jsPsychHtmlKeyboardResponse,
+  type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:26px; line-height:1.6;">
       The practice trial is complete.<br><br>
       You will now begin the main task.<br><br>
       There are <b>2 blocks</b>, with <b>3 trials per block</b>.<br><br>
-      Press any key to continue.
+      Tap below to continue.
     </div>
-  `
+  `,
+  choices: ["Start Main Task"]
 };
 
 const timeline = [
@@ -593,14 +690,15 @@ let globalTrialNumber = 1;
 
 for (let b = 0; b < NUM_BLOCKS; b++) {
   timeline.push({
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     stimulus: `
       <div style="font-size:26px; line-height:1.6;">
         Block ${b + 1} of ${NUM_BLOCKS}<br><br>
         This block has ${TRIALS_PER_BLOCK} trials.<br><br>
-        Press any key to begin.
+        Tap below to begin.
       </div>
-    `
+    `,
+    choices: ["Begin Block"]
   });
 
   for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
@@ -620,15 +718,33 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
   }
 }
 
+/* ---------- End screen with manual download ---------- */
 timeline.push({
-  type: jsPsychHtmlKeyboardResponse,
+  type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:28px; line-height:1.6;">
+    <div style="font-size:28px; line-height:1.6; max-width:900px; margin:auto;">
       Done. Thank you!<br><br>
-      Your CSV download should start automatically.<br><br>
-      Press any key to finish.
+      Tap <b>Download CSV</b> below to save your data.<br><br>
+      Then tap <b>Finish</b>.
     </div>
-  `
+  `,
+  choices: ["Download CSV", "Finish"],
+  on_finish: function(data) {
+    // Button index 0 = Download CSV, 1 = Finish
+    if (data.response === 0) {
+      const rows = [];
+
+      jsPsychInstance.data.get().values().forEach(d => {
+        if (d.placements) {
+          d.placements.forEach(row => rows.push(row));
+        }
+      });
+
+      if (rows.length > 0) {
+        downloadCSV(`${DEMO_PARTICIPANT}_emotion_grid_demo.csv`, rows);
+      }
+    }
+  }
 });
 
 jsPsychInstance.run(timeline);
