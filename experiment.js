@@ -1,16 +1,3 @@
-/*************************************************
- * KIDS SEMANTIC NETWORK DEMO - iPad friendly
- * 1 practice trial + 2 blocks
- * 3 trials per block
- * 12 images per main trial
- *
- * Changes for iPad:
- * - All "press any key" screens -> button response screens
- * - "Press N to continue" -> Continue button
- * - Removed keyboard dependency
- * - Added touch-friendly CSS
- * - End screen includes a manual CSV download button
- *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
 
@@ -120,46 +107,82 @@ const MAIN_BLOCKS = [
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 90;
-const CONFLICT_OFFSET = 50;
 
-const GRID_WIDTH = GRID_COLS * CELL_SIZE;
-const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
+/* ---------- Responsive layout ---------- */
 
-/* ---------- Touch-friendly CSS ---------- */
+function getLayoutSizes() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const maxTaskWidth = Math.min(vw * 0.94, 1100);
+  const maxGridHeight = vh * 0.52;
+
+  const cellFromWidth = Math.floor(maxTaskWidth / GRID_COLS);
+  const cellFromHeight = Math.floor(maxGridHeight / GRID_ROWS);
+
+  const cellSize = Math.max(42, Math.min(cellFromWidth, cellFromHeight, 88));
+
+  const gridWidth = GRID_COLS * cellSize;
+  const gridHeight = GRID_ROWS * cellSize;
+
+  const bottomArea = Math.max(170, Math.min(vh * 0.22, 250));
+  const conflictOffset = Math.max(18, Math.round(cellSize * 0.35));
+  const imgSize = Math.max(48, Math.min(96, Math.round(cellSize * 0.95)));
+
+  return {
+    CELL_SIZE: cellSize,
+    GRID_WIDTH: gridWidth,
+    GRID_HEIGHT: gridHeight,
+    BOTTOM_AREA: bottomArea,
+    CONFLICT_OFFSET: conflictOffset,
+    IMG_SIZE: imgSize
+  };
+}
+
+/* ---------- Inject CSS ---------- */
+
 (function injectTaskStyles() {
   const style = document.createElement("style");
   style.textContent = `
     #task-wrapper {
-      max-width: 1200px;
       margin: 0 auto;
       text-align: center;
       font-family: Arial, sans-serif;
     }
 
     #trial-label {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 600;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     #task-instructions {
-      font-size: 22px;
-      line-height: 1.5;
-      margin-bottom: 18px;
+      font-size: 20px;
+      line-height: 1.45;
+      margin-bottom: 14px;
+      padding: 0 10px;
     }
 
-    #grid-container {
-      position: relative;
-      width: ${GRID_WIDTH}px;
-      height: ${GRID_HEIGHT + 320}px;
-      margin: 0 auto;
-      border: 2px solid #444;
-      background: white;
-      touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
-      overflow: hidden;
+    #warning-text {
+      margin-top: 12px;
+      min-height: 30px;
+      font-size: 20px;
+      color: #b00020;
+      font-weight: 500;
+    }
+
+    .task-btn {
+      font-size: 22px;
+      padding: 12px 26px;
+      border-radius: 12px;
+      border: 1px solid #888;
+      background: #f5f5f5;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .task-btn:active {
+      transform: scale(0.98);
     }
 
     .grid-line-v,
@@ -169,22 +192,8 @@ const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
       pointer-events: none;
     }
 
-    .grid-line-v {
-      top: 0;
-      width: 2px;
-      height: ${GRID_HEIGHT}px;
-    }
-
-    .grid-line-h {
-      left: 0;
-      height: 2px;
-      width: ${GRID_WIDTH}px;
-    }
-
     .stim-img {
       position: absolute;
-      width: 100px;
-      height: 100px;
       object-fit: contain;
       transform: translate(-50%, -50%);
       touch-action: none;
@@ -195,49 +204,31 @@ const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
     .stim-img.dragging {
       z-index: 9999;
     }
-
-    #warning-text {
-      margin-top: 12px;
-      min-height: 32px;
-      font-size: 22px;
-      color: #b00020;
-      font-weight: 500;
-    }
-
-    .task-btn {
-      font-size: 24px;
-      padding: 14px 30px;
-      border-radius: 12px;
-      border: 1px solid #888;
-      background: #f5f5f5;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-
-    .task-btn:active {
-      transform: scale(0.98);
-    }
   `;
   document.head.appendChild(style);
 })();
 
 /* ---------- Utility functions ---------- */
 
-function getStartPositions(numImages) {
+function getStartPositions(numImages, layout) {
+  const { GRID_WIDTH, GRID_HEIGHT, BOTTOM_AREA } = layout;
+
   const cols = 6;
   const rows = Math.ceil(numImages / cols);
-  const spacingX = 140;
-  const spacingY = 140;
+
+  const spacingX = Math.min(140, GRID_WIDTH / 6.5);
+  const spacingY = Math.min(120, Math.max(75, BOTTOM_AREA / Math.max(rows + 0.3, 1)));
 
   const totalWidth = spacingX * (cols - 1);
   const startX = (GRID_WIDTH - totalWidth) / 2;
-  const startY = GRID_HEIGHT + 110;
+  const startY = GRID_HEIGHT + Math.max(36, spacingY * 0.65);
 
   const positions = [];
 
   for (let i = 0; i < numImages; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
+
     positions.push([
       startX + col * spacingX,
       startY + row * spacingY
@@ -267,30 +258,27 @@ function pxToCenterCoords(leftPx, topPx, rect) {
   return [x, y];
 }
 
-function getGridCenters() {
+function getGridCenters(layout) {
   const centers = [];
-  const totalWidth = GRID_COLS * CELL_SIZE;
-  const totalHeight = GRID_ROWS * CELL_SIZE;
+  const { GRID_WIDTH, GRID_HEIGHT, CELL_SIZE } = layout;
 
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const left = col * CELL_SIZE + CELL_SIZE / 2;
       const top = row * CELL_SIZE + CELL_SIZE / 2;
-      const x = left - totalWidth / 2;
-      const y = -(top - totalHeight / 2);
+      const x = left - GRID_WIDTH / 2;
+      const y = -(top - GRID_HEIGHT / 2);
       centers.push([x, y]);
     }
   }
   return centers;
 }
 
-const GRID_CENTERS = getGridCenters();
-
-function nearestGridCenter(x, y) {
-  let best = GRID_CENTERS[0];
+function nearestGridCenter(x, y, gridCenters) {
+  let best = gridCenters[0];
   let bestDist = Infinity;
 
-  for (const c of GRID_CENTERS) {
+  for (const c of gridCenters) {
     const dx = x - c[0];
     const dy = y - c[1];
     const d = dx * dx + dy * dy;
@@ -307,12 +295,12 @@ function samePos(a, b) {
          Math.round(a[1]) === Math.round(b[1]);
 }
 
-function offsetFromQuadrant(x, y) {
-  if (x > 0 && y > 0) return [x - CONFLICT_OFFSET, y - CONFLICT_OFFSET];
-  if (x < 0 && y < 0) return [x + CONFLICT_OFFSET, y + CONFLICT_OFFSET];
-  if (x > 0 && y < 0) return [x - CONFLICT_OFFSET, y + CONFLICT_OFFSET];
-  if (x < 0 && y > 0) return [x + CONFLICT_OFFSET, y - CONFLICT_OFFSET];
-  return [x + CONFLICT_OFFSET, y + CONFLICT_OFFSET];
+function offsetFromQuadrant(x, y, conflictOffset) {
+  if (x > 0 && y > 0) return [x - conflictOffset, y - conflictOffset];
+  if (x < 0 && y < 0) return [x + conflictOffset, y + conflictOffset];
+  if (x > 0 && y < 0) return [x - conflictOffset, y + conflictOffset];
+  if (x < 0 && y > 0) return [x + conflictOffset, y - conflictOffset];
+  return [x + conflictOffset, y + conflictOffset];
 }
 
 function makeCSVContent(rows) {
@@ -365,6 +353,10 @@ class EmotionGridPlugin {
     const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
     const totalTrialsInBlock = trial.total_trials_in_block ?? totalTrials;
 
+    const layout = getLayoutSizes();
+    const { CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, BOTTOM_AREA, CONFLICT_OFFSET, IMG_SIZE } = layout;
+    const GRID_CENTERS = getGridCenters(layout);
+
     const imageState = trialImages.map((imgPath, i) => ({
       path: imgPath,
       centerPos: null,
@@ -380,14 +372,28 @@ class EmotionGridPlugin {
         : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
 
     display_element.innerHTML = `
-      <div id="task-wrapper">
+      <div id="task-wrapper" style="max-width:${GRID_WIDTH + 40}px;">
         <div id="trial-label">${trialLabel}</div>
         <div id="task-instructions">
           Drag all ${trialImages.length} pictures into the grid.<br>
           Only one picture can occupy each square.<br>
           Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
         </div>
-        <div id="grid-container"></div>
+        <div
+          id="grid-container"
+          style="
+            position: relative;
+            width: ${GRID_WIDTH}px;
+            height: ${GRID_HEIGHT + BOTTOM_AREA}px;
+            margin: 0 auto;
+            border: 2px solid #444;
+            background: white;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+          "
+        ></div>
         <div id="warning-text"></div>
         <div>
           <button id="continue-btn" class="task-btn">Continue</button>
@@ -403,6 +409,9 @@ class EmotionGridPlugin {
       const line = document.createElement("div");
       line.className = "grid-line-v";
       line.style.left = `${c * CELL_SIZE - 1}px`;
+      line.style.top = `0px`;
+      line.style.width = `2px`;
+      line.style.height = `${GRID_HEIGHT}px`;
       container.appendChild(line);
     }
 
@@ -410,11 +419,14 @@ class EmotionGridPlugin {
       const line = document.createElement("div");
       line.className = "grid-line-h";
       line.style.top = `${r * CELL_SIZE - 1}px`;
+      line.style.left = `0px`;
+      line.style.height = `2px`;
+      line.style.width = `${GRID_WIDTH}px`;
       container.appendChild(line);
     }
 
     const getRect = () => container.getBoundingClientRect();
-    const startPositions = getStartPositions(trialImages.length);
+    const startPositions = getStartPositions(trialImages.length, layout);
 
     imageState.forEach((item, i) => {
       const rect = getRect();
@@ -425,7 +437,7 @@ class EmotionGridPlugin {
     const imgEls = [];
 
     function isInsideGrid(centerPos) {
-      const snapped = nearestGridCenter(centerPos[0], centerPos[1]);
+      const snapped = nearestGridCenter(centerPos[0], centerPos[1], GRID_CENTERS);
       const dx = Math.abs(centerPos[0] - snapped[0]);
       const dy = Math.abs(centerPos[1] - snapped[1]);
       return dx <= CELL_SIZE / 2 && dy <= CELL_SIZE / 2;
@@ -433,7 +445,7 @@ class EmotionGridPlugin {
 
     function getSnappedOrNull(centerPos) {
       if (!isInsideGrid(centerPos)) return null;
-      return nearestGridCenter(centerPos[0], centerPos[1]);
+      return nearestGridCenter(centerPos[0], centerPos[1], GRID_CENTERS);
     }
 
     function allPlacedInUniqueSquares() {
@@ -460,6 +472,8 @@ class EmotionGridPlugin {
         el.src = item.path;
         el.dataset.index = index;
         el.draggable = false;
+        el.style.width = `${IMG_SIZE}px`;
+        el.style.height = `${IMG_SIZE}px`;
 
         const [left, top] = centerCoordsToPx(item.centerPos[0], item.centerPos[1], rect);
         el.style.left = `${left}px`;
@@ -550,7 +564,11 @@ class EmotionGridPlugin {
         }
 
         if (occupied) {
-          imageState[index].centerPos = offsetFromQuadrant(currentPos[0], currentPos[1]);
+          imageState[index].centerPos = offsetFromQuadrant(
+            currentPos[0],
+            currentPos[1],
+            CONFLICT_OFFSET
+          );
           warningMessage = "That square is already occupied.";
         } else {
           imageState[index].centerPos = snapped;
@@ -613,8 +631,7 @@ EmotionGridPlugin.info = {
 
 const jsPsychInstance = initJsPsych({
   on_finish: function() {
-    // No auto-download here.
-    // We'll let the end screen handle downloading with a button.
+    // no auto download
   }
 });
 
@@ -626,6 +643,19 @@ const allImagesToPreload = [
 const preload_trial = {
   type: jsPsychPreload,
   images: allImagesToPreload
+};
+
+const fullscreen_trial = {
+  type: jsPsychFullscreen,
+  fullscreen_mode: true,
+  message: `
+    <div style="font-size:24px; line-height:1.6; max-width:900px; margin:auto;">
+      <p>This task works best in <b>full screen</b> and <b>landscape orientation</b>.</p>
+      <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
+      <p>Tap the button below to enter full screen.</p>
+    </div>
+  `,
+  button_label: "Enter Full Screen"
 };
 
 const intro_trial = {
@@ -680,6 +710,7 @@ const main_intro = {
 
 const timeline = [
   preload_trial,
+  fullscreen_trial,
   intro_trial,
   practice_intro,
   practice_trial,
@@ -718,7 +749,11 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
   }
 }
 
-/* ---------- End screen with manual download ---------- */
+timeline.push({
+  type: jsPsychFullscreen,
+  fullscreen_mode: false
+});
+
 timeline.push({
   type: jsPsychHtmlButtonResponse,
   stimulus: `
@@ -730,7 +765,6 @@ timeline.push({
   `,
   choices: ["Download CSV", "Finish"],
   on_finish: function(data) {
-    // Button index 0 = Download CSV, 1 = Finish
     if (data.response === 0) {
       const rows = [];
 
