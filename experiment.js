@@ -1,7 +1,8 @@
 /*************************************************
  * KIDS SEMANTIC NETWORK DEMO
- * 1 practice trial + 5 main trials
- * 6 images per trial
+ * 1 practice trial + 2 blocks
+ * 3 trials per block
+ * 12 images per main trial
  *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
@@ -15,50 +16,102 @@ const PRACTICE_IMAGES = [
   "stimuli/food/salad.jpg"
 ];
 
-const MAIN_TRIALS = [
+const NUM_BLOCKS = 2;
+const TRIALS_PER_BLOCK = 3;
+const TOTAL_MAIN_TRIALS = NUM_BLOCKS * TRIALS_PER_BLOCK;
+
+const MAIN_BLOCKS = [
   [
-    "stimuli/birds/peacock.jpg",
-    "stimuli/birds/penguin.jpg",
-    "stimuli/birds/pigeon.jpg",
-    "stimuli/birds/seagull.jpg",
-    "stimuli/birds/swan.jpg",
-    "stimuli/birds/crow.jpg"
+    [
+      "stimuli/animals/peacock_1.jpg", 
+      "stimuli/animals/dolphin_1.jpg", 
+      "stimuli/animals/pigeon_1.jpg", 
+      "stimuli/animals/fox_1.jpg", 
+      "stimuli/animals/lion_1.jpg", 
+      "stimuli/animals/sheep_1.jpg",
+      "stimuli/animals/horse_1.jpg", 
+      "stimuli/animals/fish_1.jpg", 
+      "stimuli/animals/squirrel_1.jpg", 
+      "stimuli/animals/butterfly_1.jpg", 
+      "stimuli/animals/ladybug_1.jpg", 
+      "stimuli/animals/wolf_1.jpg"
+    ],
+
+    [
+      "stimuli/artifact/clock_1.jpg", 
+      "stimuli/artifact/envelope_1.jpg", 
+      "stimuli/artifact/fireworks_1.jpg", 
+      "stimuli/artifact/flag_1.jpg", 
+      "stimuli/artifact/ladder_1.jpg", 
+      "stimuli/artifact/mirror_1.jpg",
+      "stimuli/artifact/snowman_1.jpg", 
+      "stimuli/artifact/tent_1.jpg", 
+      "stimuli/artifact/window_1.jpg", 
+      "stimuli/artifact/balloon_1.jpg", 
+      "stimuli/artifact/camera_1.jpg", 
+      "stimuli/artifact/candle_1.jpg"
+    ],
+    [
+       "stimuli/plants/broccoli_1.jpg", 
+      "stimuli/plants/cabbage_1.jpg", 
+      "stimuli/plants/cactus_1.jpg", 
+      "stimuli/plants/cherry_1.jpg", 
+      "stimuli/plants/flower_1.jpg", 
+      "stimuli/plants/grass_1.jpg",
+      "stimuli/plants/leaf_1.jpg", 
+      "stimuli/plants/tree_1.jpg", 
+      "stimuli/plants/acorn_1.jpg", 
+      "stimuli/plants/apple_1.jpg", 
+      "stimuli/plants/blueberry_1.jpg", 
+      "stimuli/plants/peanut_1.jpg"
+    ]
   ],
   [
-    "stimuli/insects/ant.jpg",
-    "stimuli/insects/bee.jpg",
-    "stimuli/insects/beetle.jpg",
-    "stimuli/insects/butterfly.jpg",
-    "stimuli/insects/ladybug.jpg",
-    "stimuli/insects/moth.jpg"
-  ],
-  [
-    "stimuli/plants/grass.jpg",
-    "stimuli/plants/cactus.jpg",
-    "stimuli/plants/daisy.jpg",
-    "stimuli/plants/pine_tree.jpg",
-    "stimuli/plants/walnut.jpg",
-    "stimuli/plants/acorn.jpg"
-  ],
-  [
-    "stimuli/vegetables/broccoli.jpg",
-    "stimuli/vegetables/cabbage.jpg",
-    "stimuli/vegetables/cauliflower.jpg",
-    "stimuli/vegetables/celery.jpg",
-    "stimuli/vegetables/spinach.jpg",
-    "stimuli/vegetables/beet.jpg"
-  ],
-  [
-    "stimuli/substance/paper.jpg",
-    "stimuli/substance/sand.jpg",
-    "stimuli/substance/salt.jpg",
-    "stimuli/substance/ice.jpg",
-    "stimuli/substance/marble.jpg",
-    "stimuli/substance/glue.jpg"
+    [
+      "stimuli/animals/peacock_2.jpg", 
+      "stimuli/animals/dolphin_2.jpg", 
+      "stimuli/animals/pigeon_2.jpg", 
+      "stimuli/animals/fox_2.jpg", 
+      "stimuli/animals/lion_2.jpg", 
+      "stimuli/animals/sheep_2.jpg",
+      "stimuli/animals/horse_2.jpg", 
+      "stimuli/animals/fish_2.jpg", 
+      "stimuli/animals/squirrel_2.jpg", 
+      "stimuli/animals/butterfly_2.jpg", 
+      "stimuli/animals/ladybug_2.jpg", 
+      "stimuli/animals/wolf_2.jpg"
+    ],
+    [
+      "stimuli/artifact/clock_2.jpg", 
+      "stimuli/artifact/envelope_2.jpg", 
+      "stimuli/artifact/fireworks_2.jpg", 
+      "stimuli/artifact/flag_2.jpg", 
+      "stimuli/artifact/ladder_2.jpg", 
+      "stimuli/artifact/mirror_2.jpg",
+      "stimuli/artifact/snowman_2.jpg", 
+      "stimuli/artifact/tent_2.jpg", 
+      "stimuli/artifact/window_2.jpg", 
+      "stimuli/artifact/balloon_2.jpg", 
+      "stimuli/artifact/camera_2.jpg", 
+      "stimuli/artifact/candle_2.jpg"
+    ],
+    [
+      "stimuli/plants/broccoli_2.jpg", 
+      "stimuli/plants/cabbage_2.jpg", 
+      "stimuli/plants/cactus_2.jpg", 
+      "stimuli/plants/cherry_2.jpg", 
+      "stimuli/plants/flower_2.jpg", 
+      "stimuli/plants/grass_2.jpg",
+      "stimuli/plants/leaf_2.jpg", 
+      "stimuli/plants/tree_2.jpg", 
+      "stimuli/plants/acorn_2.jpg", 
+      "stimuli/plants/apple_2.jpg", 
+      "stimuli/plants/blueberry_2.jpg", 
+      "stimuli/plants/peanut_2.jpg"
   ]
+]
 ];
 
-const NUM_MAIN_TRIALS = 5;
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
 const CELL_SIZE = 90;
@@ -70,18 +123,30 @@ const CONFLICT_OFFSET = 50;
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-function getStartPositions() {
-  const spacing = 140;
-  const startY = GRID_HEIGHT + 110; 
-  const totalWidth = spacing * 5;  
+function getStartPositions(numImages) {
+  const cols = 6;
+  const rows = Math.ceil(numImages / cols);
+  const spacingX = 140;
+  const spacingY = 140;
+
+  const totalWidth = spacingX * (cols - 1);
   const startX = (GRID_WIDTH - totalWidth) / 2;
+  const startY = GRID_HEIGHT + 110;
 
-  return Array.from({ length: 6 }, (_, i) => [
-    startX + i * spacing,
-    startY
-  ]);
+  const positions = [];
+
+  for (let i = 0; i < numImages; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+
+    positions.push([
+      startX + col * spacingX,
+      startY + row * spacingY
+    ]);
+  }
+
+  return positions;
 }
-
 
 function getFileName(path) {
   return path.split("/").pop();
@@ -189,6 +254,9 @@ class EmotionGridPlugin {
     const trialNumber = trial.trial_number;
     const totalTrials = trial.total_trials;
     const trialImages = trial.images;
+    const blockNumber = trial.block_number ?? null;
+    const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
+    const totalTrialsInBlock = trial.total_trials_in_block ?? totalTrials;
 
     const imageState = trialImages.map((imgPath, i) => ({
       path: imgPath,
@@ -199,15 +267,20 @@ class EmotionGridPlugin {
     let dragState = null;
     let warningMessage = "";
 
+    const trialLabel =
+      phase === "practice"
+        ? "Practice Trial"
+        : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
+
     display_element.innerHTML = `
       <div id="task-wrapper">
         <div id="trial-label">
-          ${phase === "practice" ? "Practice Trial" : `Main Trial ${trialNumber} of ${totalTrials}`}
+          ${trialLabel}
         </div>
         <div id="task-instructions">
-          Drag all 6 pictures into the grid.<br>
+          Drag all ${trialImages.length} pictures into the grid.<br>
           Only one picture can occupy each square.<br>
-          Press <b>N</b> when all 6 pictures are placed.
+          Press <b>N</b> when all ${trialImages.length} pictures are placed.
         </div>
         <div id="grid-container"></div>
         <div id="warning-text"></div>
@@ -233,7 +306,7 @@ class EmotionGridPlugin {
 
     const getRect = () => container.getBoundingClientRect();
 
-    const startPositions = getStartPositions();
+    const startPositions = getStartPositions(trialImages.length);
 
     imageState.forEach((item, i) => {
       const rect = getRect();
@@ -332,7 +405,7 @@ class EmotionGridPlugin {
         let top = e.clientY - rect.top - dragState.offsetY;
 
         left = clamp(left, 0, rect.width);
-        top = clamp(top, 0, rect.height + 160);
+        top = clamp(top, 0, rect.height + 320);
 
         imageState[index].centerPos = pxToCenterCoords(left, top, rect);
         updateOnePosition(index);
@@ -384,7 +457,7 @@ class EmotionGridPlugin {
 
       if (key === "n") {
         if (!allPlacedInUniqueSquares()) {
-          warningMessage = "Place all 6 pictures into different grid squares first.";
+          warningMessage = `Place all ${trialImages.length} pictures into different grid squares first.`;
           renderImages();
           return;
         }
@@ -396,7 +469,9 @@ class EmotionGridPlugin {
         const placements = imageState.map(item => ({
           participant,
           phase,
+          block: blockNumber,
           trial: trialNumber,
+          trial_in_block: trialNumberInBlock,
           image: getFileName(item.path),
           final_img_pos: `(${Math.round(item.centerPos[0])}, ${Math.round(item.centerPos[1])})`,
           posX: Math.round(item.centerPos[0]),
@@ -409,7 +484,9 @@ class EmotionGridPlugin {
         this.jsPsych.finishTrial({
           participant,
           phase,
+          block: blockNumber,
           trial: trialNumber,
+          trial_in_block: trialNumberInBlock,
           placements
         });
       }
@@ -430,7 +507,6 @@ EmotionGridPlugin.info = {
   parameters: {}
 };
 
-
 const jsPsychInstance = initJsPsych({
   on_finish: function() {
     const rows = [];
@@ -449,7 +525,7 @@ const jsPsychInstance = initJsPsych({
 
 const allImagesToPreload = [
   ...PRACTICE_IMAGES,
-  ...MAIN_TRIALS.flat()
+  ...MAIN_BLOCKS.flat(2)
 ];
 
 const preload_trial = {
@@ -463,11 +539,12 @@ const intro_trial = {
     <div style="font-size:24px; line-height:1.6; max-width:1000px; margin:auto;">
       <p>This is a demo version.</p>
       <p>You will first complete <b>1 practice trial</b>.</p>
-      <p>After that, you will complete <b>5 main trials</b>.</p>
-      <p>On each trial, <b>6 pictures</b> will appear below the grid.</p>
+      <p>After that, you will complete <b>2 blocks</b> of trials.</p>
+      <p>Each block contains <b>3 trials</b>, for a total of <b>6 main trials</b>.</p>
+      <p>On each main trial, <b>12 pictures</b> will appear below the grid.</p>
       <p>Drag each picture into the grid and arrange them however you think is best.</p>
-      <p>All 6 pictures must end up inside the grid, and each square can hold only one picture.</p>
-      <p>When all 6 pictures are placed, press <b>N</b> to continue.</p>
+      <p>All pictures must end up inside the grid, and each square can hold only one picture.</p>
+      <p>When all pictures are placed, press <b>N</b> to continue.</p>
       <p>Press any key to begin.</p>
     </div>
   `
@@ -497,7 +574,8 @@ const main_intro = {
   stimulus: `
     <div style="font-size:26px; line-height:1.6;">
       The practice trial is complete.<br><br>
-      You will now begin the 5 main trials.<br><br>
+      You will now begin the main task.<br><br>
+      There are <b>2 blocks</b>, with <b>3 trials per block</b>.<br><br>
       Press any key to continue.
     </div>
   `
@@ -511,15 +589,35 @@ const timeline = [
   main_intro
 ];
 
-for (let i = 0; i < NUM_MAIN_TRIALS; i++) {
+let globalTrialNumber = 1;
+
+for (let b = 0; b < NUM_BLOCKS; b++) {
   timeline.push({
-    type: EmotionGridPlugin,
-    participant: DEMO_PARTICIPANT,
-    phase: "main",
-    trial_number: i + 1,
-    total_trials: NUM_MAIN_TRIALS,
-    images: MAIN_TRIALS[i]
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <div style="font-size:26px; line-height:1.6;">
+        Block ${b + 1} of ${NUM_BLOCKS}<br><br>
+        This block has ${TRIALS_PER_BLOCK} trials.<br><br>
+        Press any key to begin.
+      </div>
+    `
   });
+
+  for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
+    timeline.push({
+      type: EmotionGridPlugin,
+      participant: DEMO_PARTICIPANT,
+      phase: "main",
+      block_number: b + 1,
+      trial_number: globalTrialNumber,
+      trial_number_in_block: t + 1,
+      total_trials: TOTAL_MAIN_TRIALS,
+      total_trials_in_block: TRIALS_PER_BLOCK,
+      images: MAIN_BLOCKS[b][t]
+    });
+
+    globalTrialNumber++;
+  }
 }
 
 timeline.push({
