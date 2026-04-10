@@ -122,23 +122,38 @@ const GRID_ROWS = 6;
       font-family: Arial, sans-serif;
     }
 
-    #jspsych-display-element {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
+    .jspsych-display-element {
+      width: 100vw !important;
+      height: 100vh !important;
+      overflow: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
     }
 
-    #jspsych-content {
-      max-width: none !important;
+    .jspsych-content-wrapper {
       width: 100vw !important;
       height: 100vh !important;
       margin: 0 !important;
       padding: 0 !important;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      box-sizing: border-box;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
+    }
+
+    .jspsych-content {
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
 
     .task-btn {
@@ -183,20 +198,20 @@ function getLayoutSizes() {
   const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-  const maxTaskWidth = Math.min(vw * 0.96, 1180);
-  const maxGridHeight = vh * 0.42;
+  const maxTaskWidth = Math.min(vw * 0.92, 1000);
+  const maxGridHeight = vh * 0.36;
 
   const cellFromWidth = Math.floor(maxTaskWidth / GRID_COLS);
   const cellFromHeight = Math.floor(maxGridHeight / GRID_ROWS);
 
-  const cellSize = Math.max(38, Math.min(cellFromWidth, cellFromHeight, 72));
+  const cellSize = Math.max(32, Math.min(cellFromWidth, cellFromHeight, 56));
 
   const gridWidth = GRID_COLS * cellSize;
   const gridHeight = GRID_ROWS * cellSize;
 
-  const bottomArea = Math.max(120, Math.min(vh * 0.18, 170));
-  const conflictOffset = Math.max(14, Math.round(cellSize * 0.3));
-  const imgSize = Math.max(42, Math.min(76, Math.round(cellSize * 0.88)));
+  const bottomArea = Math.max(90, Math.min(vh * 0.14, 120));
+  const conflictOffset = Math.max(10, Math.round(cellSize * 0.28));
+  const imgSize = Math.max(34, Math.min(56, Math.round(cellSize * 0.9)));
 
   return {
     VIEW_W: vw,
@@ -219,10 +234,10 @@ function getStartPositions(numImages, layout) {
   const rows = Math.ceil(numImages / cols);
 
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = Math.min(70, BOTTOM_AREA / rows);
+  const spacingY = Math.max(36, Math.min(52, BOTTOM_AREA / Math.max(rows, 1)));
 
   const startX = spacingX / 2;
-  const startY = GRID_HEIGHT + Math.max(28, spacingY * 0.55);
+  const startY = GRID_HEIGHT + 20;
 
   const positions = [];
 
@@ -373,66 +388,66 @@ class EmotionGridPlugin {
         : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
 
     display_element.innerHTML = `
-      <div id="task-wrapper" style="
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        padding: 8px 10px 12px 10px;
+  <div id="task-wrapper" style="
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 4px 6px 8px 6px;
+    overflow: hidden;
+  ">
+    <div id="trial-label" style="
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    ">
+      ${trialLabel}
+    </div>
+
+    <div id="task-instructions" style="
+      font-size: 15px;
+      line-height: 1.25;
+      margin-bottom: 6px;
+      max-width: ${GRID_WIDTH + 20}px;
+      text-align: center;
+    ">
+      Drag all ${trialImages.length} pictures into the grid.<br>
+      Only one picture can occupy each square.<br>
+      Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
+    </div>
+
+    <div
+      id="grid-container"
+      style="
+        position: relative;
+        width: ${GRID_WIDTH}px;
+        height: ${GRID_HEIGHT + BOTTOM_AREA}px;
+        border: 2px solid #444;
+        background: white;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
         overflow: hidden;
-      ">
-        <div id="trial-label" style="
-          font-size: 22px;
-          font-weight: 600;
-          margin-bottom: 8px;
-        ">
-          ${trialLabel}
-        </div>
+      "
+    ></div>
 
-        <div id="task-instructions" style="
-          font-size: 18px;
-          line-height: 1.35;
-          margin-bottom: 8px;
-          max-width: ${GRID_WIDTH + 40}px;
-          text-align: center;
-        ">
-          Drag all ${trialImages.length} pictures into the grid.<br>
-          Only one picture can occupy each square.<br>
-          Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
-        </div>
+    <div id="warning-text" style="
+      margin-top: 6px;
+      min-height: 22px;
+      font-size: 15px;
+      color: #b00020;
+      font-weight: 500;
+      text-align: center;
+    "></div>
 
-        <div
-          id="grid-container"
-          style="
-            position: relative;
-            width: ${GRID_WIDTH}px;
-            height: ${GRID_HEIGHT + BOTTOM_AREA}px;
-            border: 2px solid #444;
-            background: white;
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
-            overflow: hidden;
-          "
-        ></div>
-
-        <div id="warning-text" style="
-          margin-top: 8px;
-          min-height: 26px;
-          font-size: 18px;
-          color: #b00020;
-          font-weight: 500;
-          text-align: center;
-        "></div>
-
-        <button id="continue-btn" class="task-btn" style="margin-top: 4px;">
-          Continue
-        </button>
-      </div>
-    `;
+    <button id="continue-btn" class="task-btn" style="margin-top: 2px;">
+      Continue
+    </button>
+  </div>
+`;
 
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
