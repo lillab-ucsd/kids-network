@@ -1,3 +1,12 @@
+/*************************************************
+ * KIDS SEMANTIC NETWORK DEMO
+ * Fixed-stage scaled version for iPad
+ * Smaller left panel, bigger grid, no in-trial instructions
+ * Updated:
+ * - more space for start images
+ * - no image overlap in bottom rows
+ * - warning and Continue button moved upward
+ *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
 
@@ -117,7 +126,8 @@ const CELL_SIZE = 96;
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 140;
+/* increased from 140 so 2 rows fit comfortably */
+const BOTTOM_AREA = 185;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 76;
@@ -126,16 +136,17 @@ const CONFLICT_OFFSET = 40;
 /* ---------- Layout positions inside fixed stage ---------- */
 
 const LEFT_PANEL_X = 28;
-const LEFT_PANEL_W = 210;
+const LEFT_PANEL_W = 230;
 
 const GRID_X = 270;
-const GRID_Y = 40;
+const GRID_Y = 28;
 
+/* moved warning/button upward and widened warning area */
 const WARNING_X = 28;
-const WARNING_Y = 585;
+const WARNING_Y = 185;
 
-const CONTINUE_X = 45;
-const CONTINUE_Y = 645;
+const CONTINUE_X = 55;
+const CONTINUE_Y = 305;
 
 /* ---------- Global CSS ---------- */
 
@@ -223,11 +234,13 @@ function getTaskScale() {
 
 function getStartPositions(numImages) {
   const cols = 6;
+
+  // increased vertical spacing so the 2 rows do not overlap
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 64;
+  const spacingY = 86;
 
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 35;
+  const startY = GRID_Y + GRID_HEIGHT + 42;
 
   const positions = [];
 
@@ -396,12 +409,14 @@ class EmotionGridPlugin {
             left: ${WARNING_X}px;
             top: ${WARNING_Y}px;
             width: ${LEFT_PANEL_W}px;
-            min-height: 52px;
+            min-height: 90px;
             font-size: 18px;
             line-height: 1.25;
             color: #b00020;
             font-weight: 500;
             text-align: center;
+            box-sizing: border-box;
+            padding: 6px 4px;
           "></div>
 
           <button id="continue-btn" class="task-btn" style="
