@@ -1,7 +1,3 @@
-/*************************************************
- * KIDS SEMANTIC NETWORK DEMO
- * Fixed-stage scaled version for iPad
- *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
 
@@ -111,34 +107,35 @@ const MAIN_BLOCKS = [
 
 /* ---------- Fixed stage dimensions ---------- */
 
-const BASE_TASK_WIDTH = 1400;
-const BASE_TASK_HEIGHT = 900;
+const BASE_TASK_WIDTH = 1240;
+const BASE_TASK_HEIGHT = 780;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 90;
+const CELL_SIZE = 96;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 220;
+const BOTTOM_AREA = 140;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const IMG_SIZE = 78;
+const IMG_SIZE = 76;
 const CONFLICT_OFFSET = 40;
 
 /* ---------- Layout positions inside fixed stage ---------- */
 
-const LEFT_PANEL_X = 40;
-const LEFT_PANEL_W = 320;
+const LEFT_PANEL_X = 28;
+const LEFT_PANEL_W = 210;
 
-const GRID_X = 430;
-const GRID_Y = 70;
+const GRID_X = 270;
+const GRID_Y = 40;
 
-const CONTINUE_X = 720;
-const CONTINUE_Y = 815;
+const WARNING_X = 28;
+const WARNING_Y = 585;
 
-const WARNING_Y = 760;
+const CONTINUE_X = 45;
+const CONTINUE_Y = 645;
 
 /* ---------- Global CSS ---------- */
 
@@ -226,13 +223,11 @@ function getTaskScale() {
 
 function getStartPositions(numImages) {
   const cols = 6;
-  const rows = Math.ceil(numImages / cols);
-
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 78;
+  const spacingY = 64;
 
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 45;
+  const startY = GRID_Y + GRID_HEIGHT + 35;
 
   const positions = [];
 
@@ -371,35 +366,17 @@ class EmotionGridPlugin {
           <div style="
             position: absolute;
             left: ${LEFT_PANEL_X}px;
-            top: 90px;
+            top: 70px;
             width: ${LEFT_PANEL_W}px;
-            padding: 18px 20px;
+            padding: 14px 14px;
             border: 2px solid #d7d7d7;
             background: white;
-            font-size: 26px;
+            font-size: 20px;
             font-weight: 700;
             text-align: center;
             box-sizing: border-box;
           ">
             ${trialLabel}
-          </div>
-
-          <div style="
-            position: absolute;
-            left: ${LEFT_PANEL_X}px;
-            top: 220px;
-            width: ${LEFT_PANEL_W}px;
-            padding: 26px 22px;
-            border: 2px solid #d7d7d7;
-            background: white;
-            font-size: 22px;
-            line-height: 1.35;
-            text-align: center;
-            box-sizing: border-box;
-          ">
-            Drag all ${trialImages.length} pictures into the grid.<br><br>
-            Only one picture can occupy each square.<br><br>
-            Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
           </div>
 
           <div id="grid-container" style="
@@ -416,11 +393,12 @@ class EmotionGridPlugin {
 
           <div id="warning-text" style="
             position: absolute;
-            left: ${GRID_X}px;
+            left: ${WARNING_X}px;
             top: ${WARNING_Y}px;
-            width: ${GRID_WIDTH}px;
-            min-height: 32px;
-            font-size: 22px;
+            width: ${LEFT_PANEL_W}px;
+            min-height: 52px;
+            font-size: 18px;
+            line-height: 1.25;
             color: #b00020;
             font-weight: 500;
             text-align: center;
@@ -428,10 +406,11 @@ class EmotionGridPlugin {
 
           <button id="continue-btn" class="task-btn" style="
             position: absolute;
-            left: ${CONTINUE_X - 90}px;
+            left: ${CONTINUE_X}px;
             top: ${CONTINUE_Y}px;
-            width: 180px;
-            height: 64px;
+            width: 175px;
+            height: 62px;
+            z-index: 2000;
           ">
             Continue
           </button>
@@ -444,7 +423,6 @@ class EmotionGridPlugin {
     const warningEl = display_element.querySelector("#warning-text");
     const continueBtn = display_element.querySelector("#continue-btn");
 
-    /* draw grid lines */
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
       line.className = "grid-line-v";
@@ -465,7 +443,6 @@ class EmotionGridPlugin {
       container.appendChild(line);
     }
 
-    /* initialize positions */
     const startPositions = getStartPositions(trialImages.length);
     imageState.forEach((item, i) => {
       item.stageX = startPositions[i].x;
@@ -482,15 +459,6 @@ class EmotionGridPlugin {
         x: (clientX - stageRect.left) / currentScale,
         y: (clientY - stageRect.top) / currentScale
       };
-    }
-
-    function isInsideGrid(stageX, stageY) {
-      return (
-        stageX >= GRID_X &&
-        stageX <= GRID_X + GRID_WIDTH &&
-        stageY >= GRID_Y &&
-        stageY <= GRID_Y + GRID_HEIGHT
-      );
     }
 
     function getSnappedCellOrNull(stageX, stageY) {
@@ -698,17 +666,14 @@ const preload_trial = {
 const intro_trial = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:22px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
+    <div style="font-size:22px; line-height:1.5; max-width:900px; margin:auto; padding:20px;">
       <p><b>This task works best in landscape orientation.</b></p>
       <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
-      <p>This is a demo version.</p>
       <p>You will first complete <b>1 practice trial</b>.</p>
-      <p>After that, you will complete <b>2 blocks</b> of trials.</p>
-      <p>Each block contains <b>3 trials</b>, for a total of <b>6 main trials</b>.</p>
-      <p>On each main trial, <b>12 pictures</b> will appear below the grid.</p>
-      <p>Drag each picture into the grid and arrange them however you think is best.</p>
-      <p>All pictures must end up inside the grid, and each square can hold only one picture.</p>
-      <p>When all pictures are placed, tap <b>Continue</b> to move on.</p>
+      <p>After that, you will complete <b>2 blocks</b> of trials, with <b>3 trials per block</b>.</p>
+      <p>On each trial, drag all pictures into the grid and arrange them however you think is best.</p>
+      <p>All pictures must end up <b>inside the grid</b>, and each square can hold only <b>one</b> picture.</p>
+      <p>When you are done, tap <b>Continue</b>.</p>
     </div>
   `,
   choices: ["Begin"]
