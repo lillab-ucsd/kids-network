@@ -1,3 +1,8 @@
+/*************************************************
+ * KIDS SEMANTIC NETWORK DEMO - iPad Safari friendly
+ * Pixel-based snapping version
+ *************************************************/
+
 const DEMO_PARTICIPANT = "demo";
 
 const PRACTICE_IMAGES = [
@@ -107,9 +112,9 @@ const MAIN_BLOCKS = [
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
 
-/* ---------- Global layout overrides for jsPsych ---------- */
+/* ---------- Global CSS ---------- */
 
-(function injectGlobalOverrides() {
+(function injectGlobalStyles() {
   const style = document.createElement("style");
   style.textContent = `
     html, body {
@@ -118,62 +123,40 @@ const GRID_ROWS = 6;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #f7f7f7;
+      background: #f6f6f6;
       font-family: Arial, sans-serif;
     }
 
-    .jspsych-display-element {
-      width: 100vw !important;
-      height: 100vh !important;
-      overflow: hidden !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      box-sizing: border-box !important;
-    }
-
-    .jspsych-content-wrapper {
-      width: 100vw !important;
-      height: 100vh !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      overflow: hidden !important;
-      box-sizing: border-box !important;
-    }
-
+    .jspsych-display-element,
+    .jspsych-content-wrapper,
     .jspsych-content {
       width: 100vw !important;
       height: 100vh !important;
       max-width: none !important;
       margin: 0 !important;
       padding: 0 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
       overflow: hidden !important;
       box-sizing: border-box !important;
     }
 
+    .jspsych-content-wrapper,
+    .jspsych-content {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
     .task-btn {
-      font-size: 20px;
-      padding: 10px 22px;
-      border-radius: 12px;
+      font-size: 22px;
+      padding: 12px 26px;
+      border-radius: 14px;
       border: 1px solid #888;
-      background: #f5f5f5;
+      background: white;
       cursor: pointer;
     }
 
     .task-btn:active {
       transform: scale(0.98);
-    }
-
-    .grid-line-v,
-    .grid-line-h {
-      position: absolute;
-      background: #d0d0d0;
-      pointer-events: none;
     }
 
     .stim-img {
@@ -188,56 +171,63 @@ const GRID_ROWS = 6;
     .stim-img.dragging {
       z-index: 9999;
     }
+
+    .grid-line-v,
+    .grid-line-h {
+      position: absolute;
+      background: #cfcfcf;
+      pointer-events: none;
+    }
   `;
   document.head.appendChild(style);
 })();
 
-/* ---------- Responsive layout ---------- */
+/* ---------- Layout ---------- */
 
 function getLayoutSizes() {
   const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-  const maxTaskWidth = Math.min(vw * 0.92, 1000);
-  const maxGridHeight = vh * 0.36;
+  const sidePanelWidth = Math.max(210, Math.min(290, vw * 0.24));
+  const gap = Math.max(18, Math.min(28, vw * 0.02));
+  const rightAreaWidth = vw - sidePanelWidth - gap * 3;
 
-  const cellFromWidth = Math.floor(maxTaskWidth / GRID_COLS);
-  const cellFromHeight = Math.floor(maxGridHeight / GRID_ROWS);
+  const maxCellFromWidth = Math.floor(rightAreaWidth / GRID_COLS);
+  const maxCellFromHeight = Math.floor((vh * 0.62) / GRID_ROWS);
 
-  const cellSize = Math.max(32, Math.min(cellFromWidth, cellFromHeight, 56));
+  const cellSize = Math.max(48, Math.min(maxCellFromWidth, maxCellFromHeight, 92));
 
   const gridWidth = GRID_COLS * cellSize;
   const gridHeight = GRID_ROWS * cellSize;
 
-  const bottomArea = Math.max(90, Math.min(vh * 0.14, 120));
-  const conflictOffset = Math.max(10, Math.round(cellSize * 0.28));
-  const imgSize = Math.max(34, Math.min(56, Math.round(cellSize * 0.9)));
+  const bottomArea = Math.max(120, Math.min(vh * 0.18, 170));
+  const imgSize = Math.max(42, Math.min(Math.round(cellSize * 0.8), 72));
+  const conflictOffset = Math.max(12, Math.round(cellSize * 0.22));
 
   return {
     VIEW_W: vw,
     VIEW_H: vh,
+    SIDE_W: sidePanelWidth,
+    GAP: gap,
     CELL_SIZE: cellSize,
     GRID_WIDTH: gridWidth,
     GRID_HEIGHT: gridHeight,
     BOTTOM_AREA: bottomArea,
-    CONFLICT_OFFSET: conflictOffset,
-    IMG_SIZE: imgSize
+    IMG_SIZE: imgSize,
+    CONFLICT_OFFSET: conflictOffset
   };
 }
 
-/* ---------- Utility functions ---------- */
-
 function getStartPositions(numImages, layout) {
   const { GRID_WIDTH, GRID_HEIGHT, BOTTOM_AREA } = layout;
-
   const cols = 6;
   const rows = Math.ceil(numImages / cols);
 
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = Math.max(36, Math.min(52, BOTTOM_AREA / Math.max(rows, 1)));
+  const spacingY = Math.max(42, Math.min(62, BOTTOM_AREA / Math.max(rows, 1)));
 
   const startX = spacingX / 2;
-  const startY = GRID_HEIGHT + 20;
+  const startY = GRID_HEIGHT + 18;
 
   const positions = [];
 
@@ -245,78 +235,42 @@ function getStartPositions(numImages, layout) {
     const col = i % cols;
     const row = Math.floor(i / cols);
 
-    positions.push([
-      startX + col * spacingX,
-      startY + row * spacingY
-    ]);
+    positions.push({
+      x: startX + col * spacingX,
+      y: startY + row * spacingY
+    });
   }
 
   return positions;
 }
 
-function getFileName(path) {
-  return path.split("/").pop();
+function getCellCenterPx(col, row, cellSize) {
+  return {
+    x: col * cellSize + cellSize / 2,
+    y: row * cellSize + cellSize / 2
+  };
+}
+
+function nearestCellCenterPx(x, y, cellSize) {
+  const col = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(x / cellSize)));
+  const row = Math.max(0, Math.min(GRID_ROWS - 1, Math.floor(y / cellSize)));
+  return {
+    ...getCellCenterPx(col, row, cellSize),
+    col,
+    row
+  };
+}
+
+function sameCell(a, b) {
+  return a.col === b.col && a.row === b.row;
 }
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
-function centerCoordsToPx(x, y, rect) {
-  const left = x + rect.width / 2;
-  const top = rect.height / 2 - y;
-  return [left, top];
-}
-
-function pxToCenterCoords(leftPx, topPx, rect) {
-  const x = leftPx - rect.width / 2;
-  const y = -(topPx - rect.height / 2);
-  return [x, y];
-}
-
-function getGridCenters(layout) {
-  const centers = [];
-  const { GRID_WIDTH, GRID_HEIGHT, CELL_SIZE } = layout;
-
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      const left = col * CELL_SIZE + CELL_SIZE / 2;
-      const top = row * CELL_SIZE + CELL_SIZE / 2;
-      const x = left - GRID_WIDTH / 2;
-      const y = -(top - GRID_HEIGHT / 2);
-      centers.push([x, y]);
-    }
-  }
-  return centers;
-}
-
-function nearestGridCenter(x, y, gridCenters) {
-  let best = gridCenters[0];
-  let bestDist = Infinity;
-
-  for (const c of gridCenters) {
-    const dx = x - c[0];
-    const dy = y - c[1];
-    const d = dx * dx + dy * dy;
-    if (d < bestDist) {
-      best = c;
-      bestDist = d;
-    }
-  }
-  return best;
-}
-
-function samePos(a, b) {
-  return Math.round(a[0]) === Math.round(b[0]) &&
-         Math.round(a[1]) === Math.round(b[1]);
-}
-
-function offsetFromQuadrant(x, y, conflictOffset) {
-  if (x > 0 && y > 0) return [x - conflictOffset, y - conflictOffset];
-  if (x < 0 && y < 0) return [x + conflictOffset, y + conflictOffset];
-  if (x > 0 && y < 0) return [x - conflictOffset, y + conflictOffset];
-  if (x < 0 && y > 0) return [x + conflictOffset, y - conflictOffset];
-  return [x + conflictOffset, y + conflictOffset];
+function getFileName(path) {
+  return path.split("/").pop();
 }
 
 function makeCSVContent(rows) {
@@ -363,19 +317,23 @@ class EmotionGridPlugin {
     const participant = trial.participant;
     const phase = trial.phase;
     const trialNumber = trial.trial_number;
-    const totalTrials = trial.total_trials;
     const trialImages = trial.images;
     const blockNumber = trial.block_number ?? null;
     const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
-    const totalTrialsInBlock = trial.total_trials_in_block ?? totalTrials;
+    const totalTrialsInBlock = trial.total_trials_in_block ?? trial.total_trials;
 
     const layout = getLayoutSizes();
-    const { CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, BOTTOM_AREA, CONFLICT_OFFSET, IMG_SIZE } = layout;
-    const GRID_CENTERS = getGridCenters(layout);
+    const {
+      VIEW_W, VIEW_H, SIDE_W, GAP,
+      CELL_SIZE, GRID_WIDTH, GRID_HEIGHT,
+      BOTTOM_AREA, IMG_SIZE, CONFLICT_OFFSET
+    } = layout;
+
+    const containerHeight = GRID_HEIGHT + BOTTOM_AREA;
 
     const imageState = trialImages.map((imgPath, i) => ({
       path: imgPath,
-      centerPos: null,
+      px: { x: 0, y: 0 },
       index: i
     }));
 
@@ -388,71 +346,97 @@ class EmotionGridPlugin {
         : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
 
     display_element.innerHTML = `
-  <div id="task-wrapper" style="
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    padding: 4px 6px 8px 6px;
-    overflow: hidden;
-  ">
-    <div id="trial-label" style="
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    ">
-      ${trialLabel}
-    </div>
-
-    <div id="task-instructions" style="
-      font-size: 15px;
-      line-height: 1.25;
-      margin-bottom: 6px;
-      max-width: ${GRID_WIDTH + 20}px;
-      text-align: center;
-    ">
-      Drag all ${trialImages.length} pictures into the grid.<br>
-      Only one picture can occupy each square.<br>
-      Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
-    </div>
-
-    <div
-      id="grid-container"
-      style="
-        position: relative;
-        width: ${GRID_WIDTH}px;
-        height: ${GRID_HEIGHT + BOTTOM_AREA}px;
-        border: 2px solid #444;
-        background: white;
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
+      <div style="
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 14px 16px;
+        gap: ${GAP}px;
         overflow: hidden;
-      "
-    ></div>
+      ">
+        <div style="
+          width: ${SIDE_W}px;
+          max-width: ${SIDE_W}px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: center;
+          gap: 12px;
+          flex-shrink: 0;
+        ">
+          <div style="
+            font-size: 22px;
+            font-weight: 700;
+            padding: 14px 18px;
+            border: 2px solid #d8d8d8;
+            background: white;
+            box-sizing: border-box;
+            width: 100%;
+          ">
+            ${trialLabel}
+          </div>
 
-    <div id="warning-text" style="
-      margin-top: 6px;
-      min-height: 22px;
-      font-size: 15px;
-      color: #b00020;
-      font-weight: 500;
-      text-align: center;
-    "></div>
+          <div style="
+            font-size: 18px;
+            line-height: 1.35;
+            padding: 16px 18px;
+            border: 2px solid #d8d8d8;
+            background: white;
+            box-sizing: border-box;
+            width: 100%;
+            text-align: center;
+          ">
+            Drag all ${trialImages.length} pictures into the grid.<br><br>
+            Only one picture can occupy each square.<br><br>
+            Tap <b>Continue</b> when all ${trialImages.length} pictures are placed.
+          </div>
+        </div>
 
-    <button id="continue-btn" class="task-btn" style="margin-top: 2px;">
-      Continue
-    </button>
-  </div>
-`;
+        <div style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          flex: 1;
+          min-width: 0;
+        ">
+          <div
+            id="grid-container"
+            style="
+              position: relative;
+              width: ${GRID_WIDTH}px;
+              height: ${containerHeight}px;
+              border: 3px solid #444;
+              background: white;
+              touch-action: none;
+              user-select: none;
+              -webkit-user-select: none;
+              overflow: hidden;
+            "
+          ></div>
+
+          <div id="warning-text" style="
+            min-height: 28px;
+            font-size: 18px;
+            color: #b00020;
+            font-weight: 500;
+            text-align: center;
+          "></div>
+
+          <button id="continue-btn" class="task-btn">Continue</button>
+        </div>
+      </div>
+    `;
 
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
     const continueBtn = display_element.querySelector("#continue-btn");
 
+    /* draw grid lines */
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
       line.className = "grid-line-v";
@@ -473,59 +457,53 @@ class EmotionGridPlugin {
       container.appendChild(line);
     }
 
-    const getRect = () => container.getBoundingClientRect();
+    /* initialize positions */
     const startPositions = getStartPositions(trialImages.length, layout);
-
     imageState.forEach((item, i) => {
-      const rect = getRect();
-      const [left, top] = startPositions[i];
-      item.centerPos = pxToCenterCoords(left, top, rect);
+      item.px = { ...startPositions[i] };
     });
 
     const imgEls = [];
 
-    function isInsideGrid(centerPos) {
-      const snapped = nearestGridCenter(centerPos[0], centerPos[1], GRID_CENTERS);
-      const dx = Math.abs(centerPos[0] - snapped[0]);
-      const dy = Math.abs(centerPos[1] - snapped[1]);
-      return dx <= CELL_SIZE / 2 && dy <= CELL_SIZE / 2;
+    function isInsideGrid(px) {
+      return (
+        px.x >= 0 &&
+        px.x <= GRID_WIDTH &&
+        px.y >= 0 &&
+        px.y <= GRID_HEIGHT
+      );
     }
 
-    function getSnappedOrNull(centerPos) {
-      if (!isInsideGrid(centerPos)) return null;
-      return nearestGridCenter(centerPos[0], centerPos[1], GRID_CENTERS);
+    function getSnappedCellOrNull(px) {
+      if (!isInsideGrid(px)) return null;
+      return nearestCellCenterPx(px.x, px.y, CELL_SIZE);
     }
 
     function allPlacedInUniqueSquares() {
-      const snappedPositions = [];
+      const occupied = [];
 
       for (const item of imageState) {
-        const snapped = getSnappedOrNull(item.centerPos);
+        const snapped = getSnappedCellOrNull(item.px);
         if (!snapped) return false;
-        snappedPositions.push(`${Math.round(snapped[0])},${Math.round(snapped[1])}`);
+        occupied.push(`${snapped.col},${snapped.row}`);
       }
 
-      return new Set(snappedPositions).size === imageState.length;
+      return new Set(occupied).size === imageState.length;
     }
 
     function renderImages() {
       imgEls.forEach(el => el.remove());
       imgEls.length = 0;
 
-      const rect = getRect();
-
       imageState.forEach((item, index) => {
         const el = document.createElement("img");
         el.className = "stim-img";
         el.src = item.path;
-        el.dataset.index = index;
         el.draggable = false;
         el.style.width = `${IMG_SIZE}px`;
         el.style.height = `${IMG_SIZE}px`;
-
-        const [left, top] = centerCoordsToPx(item.centerPos[0], item.centerPos[1], rect);
-        el.style.left = `${left}px`;
-        el.style.top = `${top}px`;
+        el.style.left = `${item.px.x}px`;
+        el.style.top = `${item.px.y}px`;
 
         container.appendChild(el);
         imgEls.push(el);
@@ -539,25 +517,20 @@ class EmotionGridPlugin {
     function updateOnePosition(index) {
       const el = imgEls[index];
       if (!el) return;
-
-      const rect = getRect();
-      const [left, top] = centerCoordsToPx(
-        imageState[index].centerPos[0],
-        imageState[index].centerPos[1],
-        rect
-      );
-
-      el.style.left = `${left}px`;
-      el.style.top = `${top}px`;
+      el.style.left = `${imageState[index].px.x}px`;
+      el.style.top = `${imageState[index].px.y}px`;
     }
 
     function attachDragHandlers(el, index) {
       const startDrag = (clientX, clientY) => {
-        const imgRect = el.getBoundingClientRect();
+        const rect = container.getBoundingClientRect();
+        const centerX = imageState[index].px.x;
+        const centerY = imageState[index].px.y;
+
         dragState = {
           index,
-          offsetX: clientX - imgRect.left - imgRect.width / 2,
-          offsetY: clientY - imgRect.top - imgRect.height / 2
+          offsetX: clientX - rect.left - centerX,
+          offsetY: clientY - rect.top - centerY
         };
         el.classList.add("dragging");
       };
@@ -573,14 +546,14 @@ class EmotionGridPlugin {
       el.addEventListener("pointermove", (e) => {
         if (!dragState || dragState.index !== index) return;
 
-        const rect = getRect();
-        let left = e.clientX - rect.left - dragState.offsetX;
-        let top = e.clientY - rect.top - dragState.offsetY;
+        const rect = container.getBoundingClientRect();
+        let x = e.clientX - rect.left - dragState.offsetX;
+        let y = e.clientY - rect.top - dragState.offsetY;
 
-        left = clamp(left, 0, rect.width);
-        top = clamp(top, 0, rect.height);
+        x = clamp(x, IMG_SIZE / 2, rect.width - IMG_SIZE / 2);
+        y = clamp(y, IMG_SIZE / 2, rect.height - IMG_SIZE / 2);
 
-        imageState[index].centerPos = pxToCenterCoords(left, top, rect);
+        imageState[index].px = { x, y };
         updateOnePosition(index);
       });
 
@@ -589,8 +562,8 @@ class EmotionGridPlugin {
 
         el.classList.remove("dragging");
 
-        const currentPos = imageState[index].centerPos;
-        const snapped = getSnappedOrNull(currentPos);
+        const currentPx = imageState[index].px;
+        const snapped = getSnappedCellOrNull(currentPx);
 
         if (!snapped) {
           warningMessage = "Each picture must end inside the grid.";
@@ -602,22 +575,21 @@ class EmotionGridPlugin {
         let occupied = false;
         for (let i = 0; i < imageState.length; i++) {
           if (i === index) continue;
-          const otherSnapped = getSnappedOrNull(imageState[i].centerPos);
-          if (otherSnapped && samePos(otherSnapped, snapped)) {
+          const otherSnapped = getSnappedCellOrNull(imageState[i].px);
+          if (otherSnapped && sameCell(otherSnapped, snapped)) {
             occupied = true;
             break;
           }
         }
 
         if (occupied) {
-          imageState[index].centerPos = offsetFromQuadrant(
-            currentPos[0],
-            currentPos[1],
-            CONFLICT_OFFSET
-          );
+          imageState[index].px = {
+            x: clamp(currentPx.x + CONFLICT_OFFSET, IMG_SIZE / 2, GRID_WIDTH - IMG_SIZE / 2),
+            y: clamp(currentPx.y + CONFLICT_OFFSET, IMG_SIZE / 2, containerHeight - IMG_SIZE / 2)
+          };
           warningMessage = "That square is already occupied.";
         } else {
-          imageState[index].centerPos = snapped;
+          imageState[index].px = { x: snapped.x, y: snapped.y };
           warningMessage = "";
         }
 
@@ -637,20 +609,26 @@ class EmotionGridPlugin {
       }
 
       imageState.forEach(item => {
-        item.centerPos = getSnappedOrNull(item.centerPos);
+        const snapped = getSnappedCellOrNull(item.px);
+        item.px = { x: snapped.x, y: snapped.y };
       });
 
-      const placements = imageState.map(item => ({
-        participant,
-        phase,
-        block: blockNumber,
-        trial: trialNumber,
-        trial_in_block: trialNumberInBlock,
-        image: getFileName(item.path),
-        final_img_pos: `(${Math.round(item.centerPos[0])}, ${Math.round(item.centerPos[1])})`,
-        posX: Math.round(item.centerPos[0]),
-        posY: Math.round(item.centerPos[1])
-      }));
+      const placements = imageState.map(item => {
+        const snapped = getSnappedCellOrNull(item.px);
+        return {
+          participant,
+          phase,
+          block: blockNumber,
+          trial: trialNumber,
+          trial_in_block: trialNumberInBlock,
+          image: getFileName(item.path),
+          final_img_pos: `(${Math.round(item.px.x)}, ${Math.round(item.px.y)})`,
+          posX: Math.round(item.px.x),
+          posY: Math.round(item.px.y),
+          grid_col: snapped.col + 1,
+          grid_row: snapped.row + 1
+        };
+      });
 
       display_element.innerHTML = "";
 
@@ -677,7 +655,7 @@ EmotionGridPlugin.info = {
 
 const jsPsychInstance = initJsPsych({
   on_finish: function() {
-    // No auto-download. Manual download at end.
+    // manual download at end
   }
 });
 
