@@ -356,6 +356,7 @@ class EmotionGridPlugin {
             top: ${BUTTON_Y}px;
             width: 140px;
             height: 42px;
+            z-index: 10
           ">
             Continue
           </button>
