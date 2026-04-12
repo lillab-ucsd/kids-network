@@ -22,29 +22,13 @@
       font-family: Arial, sans-serif;
     }
 
-    body {
-      touch-action: manipulation;
-      -webkit-text-size-adjust: 100%;
-    }
-
-    /* Keep jsPsych's default page structure simple */
-    #jspsych-target,
-    .jspsych-display-element {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Only generic task element styles here.
-       Do NOT put fixed layout styles for #grid-container, #task-instructions, etc.
-       Those should be created by experiment.js */
     .stim-img {
       position: absolute;
       object-fit: contain;
       transform: translate(-50%, -50%);
-      user-select: none;
-      -webkit-user-drag: none;
       touch-action: none;
+      -webkit-user-drag: none;
+      user-select: none;
     }
 
     .stim-img.dragging {
@@ -59,20 +43,15 @@
     }
 
     .task-btn {
-      font-family: Arial, sans-serif;
-      background: white;
-      border: 1px solid #888;
+      font-size: 18px;
       border-radius: 12px;
+      border: 1px solid #888;
+      background: white;
       cursor: pointer;
-    }
-
-    .task-btn:active {
-      transform: scale(0.98);
     }
   </style>
 </head>
 <body>
-  <div id="jspsych-target"></div>
-  <script src="experiment.js?v=1"></script>
+  <script src="experiment.js?v=30"></script>
 </body>
 </html>

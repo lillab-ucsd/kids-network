@@ -117,18 +117,17 @@ const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
 
-const BOTTOM_AREA = 185;
+const BOTTOM_AREA = 200;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 80;
 const CONFLICT_OFFSET = 42;
 
 const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
-const GRID_Y = 58;
+const GRID_Y = 72;
 
-const TITLE_Y = 14;
-const WARNING_Y = 645;
-const BUTTON_Y = 720;
+const WARNING_Y = 655;
+const TOPBAR_Y = 14;
 
 
 /* ---------- minimal CSS ---------- */
@@ -187,7 +186,7 @@ function getStartPositions(numImages) {
   const spacingX = GRID_WIDTH / cols;
   const spacingY = 92;
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 30;
+  const startY = GRID_Y + GRID_HEIGHT + 25;
 
   const out = [];
   for (let i = 0; i < numImages; i++) {
@@ -293,76 +292,80 @@ class EmotionGridPlugin {
     let warningMessage = "";
     const scale = getTaskScale();
 
-    display_element.innerHTML = `
+display_element.innerHTML = `
+  <div style="
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+    overflow: hidden;
+  ">
+    <div id="task-stage" style="
+      width: ${BASE_TASK_WIDTH}px;
+      height: ${BASE_TASK_HEIGHT}px;
+      position: relative;
+      transform: scale(${scale});
+      transform-origin: center center;
+      background: #f5f5f5;
+    ">
       <div style="
-        width: 100vw;
-        height: 100vh;
+        position: absolute;
+        top: ${TOPBAR_Y}px;
+        left: 0;
+        width: ${BASE_TASK_WIDTH}px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #f5f5f5;
-        overflow: hidden;
+        gap: 24px;
+        z-index: 3;
       ">
-        <div id="task-stage" style="
-          width: ${BASE_TASK_WIDTH}px;
-          height: ${BASE_TASK_HEIGHT}px;
-          position: relative;
-          transform: scale(${scale});
-          transform-origin: center center;
-          background: #f5f5f5;
+        <div style="
+          font-size: 18px;
+          font-weight: 700;
+          line-height: 1;
         ">
-          <div style="
-            position: absolute;
-            top: ${TITLE_Y}px;
-            left: 0;
-            width: ${BASE_TASK_WIDTH}px;
-            text-align: center;
-            font-size: 18px;
-            font-weight: 700;
-          ">
-            ${trialLabel}
-          </div>
-
-          <div id="grid-container" style="
-            position: absolute;
-            left: ${GRID_X}px;
-            top: ${GRID_Y}px;
-            width: ${GRID_WIDTH}px;
-            height: ${CONTAINER_HEIGHT}px;
-            border: 3px solid #444;
-            background: white;
-            overflow: hidden;
-            touch-action: none;
-            z-index: 1;
-          "></div>
-
-          <div id="warning-text" style="
-            position: absolute;
-            left: 0;
-            top: ${WARNING_Y}px;
-            width: ${BASE_TASK_WIDTH}px;
-            min-height: 26px;
-            text-align: center;
-            font-size: 16px;
-            line-height: 1.2;
-            color: #b00020;
-            font-weight: 500;
-            z-index: 2;
-          "></div>
-
-          <button id="continue-btn" class="task-btn" style="
-            position: absolute;
-            left: ${(BASE_TASK_WIDTH - 140) / 2}px;
-            top: ${BUTTON_Y}px;
-            width: 140px;
-            height: 42px;
-            z-index: 10
-          ">
-            Continue
-          </button>
+          ${trialLabel}
         </div>
+
+        <button id="continue-btn" class="task-btn" style="
+          width: 150px;
+          height: 46px;
+        ">
+          Continue
+        </button>
       </div>
-    `;
+
+      <div id="grid-container" style="
+        position: absolute;
+        left: ${GRID_X}px;
+        top: ${GRID_Y}px;
+        width: ${GRID_WIDTH}px;
+        height: ${CONTAINER_HEIGHT}px;
+        border: 3px solid #444;
+        background: white;
+        overflow: hidden;
+        touch-action: none;
+        z-index: 1;
+      "></div>
+
+      <div id="warning-text" style="
+        position: absolute;
+        left: 0;
+        top: ${WARNING_Y}px;
+        width: ${BASE_TASK_WIDTH}px;
+        min-height: 26px;
+        text-align: center;
+        font-size: 16px;
+        line-height: 1.2;
+        color: #b00020;
+        font-weight: 500;
+        z-index: 2;
+      "></div>
+    </div>
+  </div>
+`;
 
     const stage = display_element.querySelector("#task-stage");
     const container = display_element.querySelector("#grid-container");
