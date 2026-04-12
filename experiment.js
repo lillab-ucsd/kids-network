@@ -1,12 +1,3 @@
-/*************************************************
- * KIDS SEMANTIC NETWORK DEMO
- * iPad-friendly version
- * - Trial title on top
- * - Warning + Continue at bottom
- * - Grid takes most of the screen
- * - Instruction pages are separate, one button each
- *************************************************/
-
 const DEMO_PARTICIPANT = "demo";
 
 const PRACTICE_IMAGES = [
@@ -113,36 +104,34 @@ const MAIN_BLOCKS = [
   ]
 ];
 
-/* ---------- Fixed stage dimensions ---------- */
+/* ---------- fixed stage ---------- */
 
 const BASE_TASK_WIDTH = 1120;
 const BASE_TASK_HEIGHT = 760;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 96;
+const CELL_SIZE = 92;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 140;
+const BOTTOM_AREA = 150;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const IMG_SIZE = 82;
+const IMG_SIZE = 80;
 const CONFLICT_OFFSET = 42;
 
-/* ---------- Layout inside stage ---------- */
+const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
+const GRID_Y = 58;
 
-const GRID_X = 80;
-const GRID_Y = 70;
+const TITLE_Y = 14;
+const WARNING_Y = 655;
+const BUTTON_Y = 700;
 
-const TITLE_Y = 18;
-const WARNING_Y = 665;
-const BUTTON_Y = 705;
+/* ---------- minimal CSS ---------- */
 
-/* ---------- Minimal global CSS ---------- */
-
-(function injectGlobalStyles() {
+(function injectStyles() {
   const style = document.createElement("style");
   style.textContent = `
     html, body {
@@ -150,7 +139,6 @@ const BUTTON_Y = 705;
       padding: 0;
       width: 100%;
       height: 100%;
-      overflow: hidden;
       background: #f5f5f5;
       font-family: Arial, sans-serif;
     }
@@ -176,56 +164,39 @@ const BUTTON_Y = 705;
     }
 
     .task-btn {
-      font-size: 20px;
-      padding: 10px 22px;
-      border-radius: 14px;
+      font-size: 18px;
+      border-radius: 12px;
       border: 1px solid #888;
       background: white;
       cursor: pointer;
-    }
-
-    .task-btn:active {
-      transform: scale(0.98);
     }
   `;
   document.head.appendChild(style);
 })();
 
-/* ---------- Scaling ---------- */
-
 function getTaskScale() {
   const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-
-  const scaleX = vw / BASE_TASK_WIDTH;
-  const scaleY = vh / BASE_TASK_HEIGHT;
-
-  return Math.min(scaleX, scaleY, 1);
+  return Math.min(vw / BASE_TASK_WIDTH, vh / BASE_TASK_HEIGHT, 1);
 }
-
-/* ---------- Utility functions ---------- */
 
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 88;
-
+  const spacingY = 86;
   const startX = GRID_X + spacingX / 2;
   const startY = GRID_Y + GRID_HEIGHT + 38;
 
-  const positions = [];
-
+  const out = [];
   for (let i = 0; i < numImages; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-
-    positions.push({
+    out.push({
       x: startX + col * spacingX,
       y: startY + row * spacingY
     });
   }
-
-  return positions;
+  return out;
 }
 
 function getFileName(path) {
@@ -265,38 +236,30 @@ function sameCell(a, b) {
 
 function makeCSVContent(rows) {
   if (!rows.length) return "";
-
   const headers = Object.keys(rows[0]);
   return [
     headers.join(","),
     ...rows.map(row =>
-      headers.map(h => {
-        const val = row[h] ?? "";
-        const escaped = String(val).replace(/"/g, '""');
-        return `"${escaped}"`;
-      }).join(",")
+      headers.map(h => `"${String(row[h] ?? "").replace(/"/g, '""')}"`).join(",")
     )
   ].join("\n");
 }
 
 function downloadCSV(filename, rows) {
   if (!rows.length) return;
-
   const csv = makeCSVContent(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/* ---------- Custom plugin ---------- */
+/* ---------- plugin ---------- */
 
 class EmotionGridPlugin {
   constructor(jsPsych) {
@@ -326,7 +289,6 @@ class EmotionGridPlugin {
 
     let dragState = null;
     let warningMessage = "";
-
     const scale = getTaskScale();
 
     display_element.innerHTML = `
@@ -336,8 +298,8 @@ class EmotionGridPlugin {
         display: flex;
         align-items: center;
         justify-content: center;
-        overflow: hidden;
         background: #f5f5f5;
+        overflow: hidden;
       ">
         <div id="task-stage" style="
           width: ${BASE_TASK_WIDTH}px;
@@ -349,12 +311,12 @@ class EmotionGridPlugin {
         ">
           <div style="
             position: absolute;
-            left: 0;
             top: ${TITLE_Y}px;
+            left: 0;
             width: ${BASE_TASK_WIDTH}px;
+            text-align: center;
             font-size: 18px;
             font-weight: 700;
-            text-align: center;
           ">
             ${trialLabel}
           </div>
@@ -369,6 +331,7 @@ class EmotionGridPlugin {
             background: white;
             overflow: hidden;
             touch-action: none;
+            z-index: 1;
           "></div>
 
           <div id="warning-text" style="
@@ -376,20 +339,22 @@ class EmotionGridPlugin {
             left: 0;
             top: ${WARNING_Y}px;
             width: ${BASE_TASK_WIDTH}px;
-            min-height: 30px;
-            font-size: 18px;
+            min-height: 26px;
+            text-align: center;
+            font-size: 16px;
             line-height: 1.2;
             color: #b00020;
             font-weight: 500;
-            text-align: center;
+            z-index: 2;
           "></div>
 
           <button id="continue-btn" class="task-btn" style="
             position: absolute;
-            left: ${(BASE_TASK_WIDTH - 160) / 2}px;
+            left: ${(BASE_TASK_WIDTH - 150) / 2}px;
             top: ${BUTTON_Y}px;
-            width: 160px;
-            height: 50px;
+            width: 150px;
+            height: 46px;
+            z-index: 3;
           ">
             Continue
           </button>
@@ -431,12 +396,11 @@ class EmotionGridPlugin {
     const imgEls = [];
 
     function getStagePointFromClient(clientX, clientY) {
-      const stageRect = stage.getBoundingClientRect();
+      const rect = stage.getBoundingClientRect();
       const currentScale = getTaskScale();
-
       return {
-        x: (clientX - stageRect.left) / currentScale,
-        y: (clientY - stageRect.top) / currentScale
+        x: (clientX - rect.left) / currentScale,
+        y: (clientY - rect.top) / currentScale
       };
     }
 
@@ -446,13 +410,11 @@ class EmotionGridPlugin {
 
     function allPlacedInUniqueSquares() {
       const occupied = [];
-
       for (const item of imageState) {
         const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
         if (!snapped) return false;
         occupied.push(`${snapped.col},${snapped.row}`);
       }
-
       return new Set(occupied).size === imageState.length;
     }
 
@@ -472,7 +434,6 @@ class EmotionGridPlugin {
 
         container.appendChild(el);
         imgEls.push(el);
-
         attachDragHandlers(el, index);
       });
 
@@ -505,7 +466,6 @@ class EmotionGridPlugin {
 
       el.addEventListener("pointermove", (e) => {
         if (!dragState || dragState.index !== index) return;
-
         const p = getStagePointFromClient(e.clientX, e.clientY);
 
         let stageX = p.x - dragState.offsetX;
@@ -521,7 +481,6 @@ class EmotionGridPlugin {
 
       const finishDrag = () => {
         if (!dragState || dragState.index !== index) return;
-
         el.classList.remove("dragging");
 
         const currentX = imageState[index].stageX;
@@ -624,9 +583,7 @@ EmotionGridPlugin.info = {
 
 /* ---------- jsPsych setup ---------- */
 
-const jsPsychInstance = initJsPsych({
-  on_finish: function() {}
-});
+const jsPsychInstance = initJsPsych({ on_finish: function() {} });
 
 const allImagesToPreload = [
   ...PRACTICE_IMAGES,
@@ -674,11 +631,7 @@ const task_instruction_page = {
 
 const practice_intro = {
   type: jsPsychHtmlButtonResponse,
-  stimulus: `
-    <div style="font-size:24px; line-height:1.5; padding:20px;">
-      Practice Trial
-    </div>
-  `,
+  stimulus: `<div style="font-size:24px; padding:20px;">Practice Trial</div>`,
   choices: ["Start Practice"]
 };
 
