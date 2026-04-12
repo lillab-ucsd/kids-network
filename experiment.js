@@ -1,7 +1,7 @@
 /*************************************************
  * KIDS SEMANTIC NETWORK DEMO
  * Fixed-stage scaled version for iPad
- * Clean left panel: title + warning + button only
+ * Larger grid + one button per instruction page
  *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
@@ -112,30 +112,30 @@ const MAIN_BLOCKS = [
 
 /* ---------- Fixed stage dimensions ---------- */
 
-const BASE_TASK_WIDTH = 1240;
-const BASE_TASK_HEIGHT = 780;
+const BASE_TASK_WIDTH = 1160;
+const BASE_TASK_HEIGHT = 720;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 96;
+const CELL_SIZE = 108;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 185;
+const BOTTOM_AREA = 170;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const IMG_SIZE = 76;
-const CONFLICT_OFFSET = 40;
+const IMG_SIZE = 84;
+const CONFLICT_OFFSET = 42;
 
 /* ---------- Layout positions inside fixed stage ---------- */
 
-const LEFT_PANEL_X = 28;
-const LEFT_PANEL_Y = 70;
-const LEFT_PANEL_W = 230;
+const LEFT_PANEL_X = 20;
+const LEFT_PANEL_Y = 52;
+const LEFT_PANEL_W = 165;
 
-const GRID_X = 270;
-const GRID_Y = 28;
+const GRID_X = 205;
+const GRID_Y = 12;
 
 /* ---------- Global CSS ---------- */
 
@@ -224,7 +224,7 @@ function getTaskScale() {
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 86;
+  const spacingY = 92;
 
   const startX = GRID_X + spacingX / 2;
   const startY = GRID_Y + GRID_HEIGHT + 42;
@@ -234,7 +234,6 @@ function getStartPositions(numImages) {
   for (let i = 0; i < numImages; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-
     positions.push({
       x: startX + col * spacingX,
       y: startY + row * spacingY
@@ -371,17 +370,18 @@ class EmotionGridPlugin {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 18px;
+            gap: 14px;
             background: transparent;
           ">
             <div style="
               width: 100%;
-              padding: 14px 14px;
+              padding: 12px 10px;
               border: 2px solid #d7d7d7;
               background: white;
-              font-size: 20px;
+              font-size: 17px;
               font-weight: 700;
               text-align: center;
+              line-height: 1.25;
               box-sizing: border-box;
             ">
               ${trialLabel}
@@ -389,20 +389,21 @@ class EmotionGridPlugin {
 
             <div id="warning-text" style="
               width: 100%;
-              min-height: 96px;
-              font-size: 18px;
-              line-height: 1.25;
+              min-height: 82px;
+              font-size: 16px;
+              line-height: 1.2;
               color: #b00020;
               font-weight: 500;
               text-align: center;
               box-sizing: border-box;
-              padding: 6px 4px;
+              padding: 4px 2px;
               background: transparent;
             "></div>
 
             <button id="continue-btn" class="task-btn" style="
-              width: 175px;
-              height: 62px;
+              width: 150px;
+              height: 56px;
+              font-size: 18px;
               z-index: 2000;
             ">
               Continue
@@ -460,7 +461,6 @@ class EmotionGridPlugin {
     function getStagePointFromClient(clientX, clientY) {
       const stageRect = stage.getBoundingClientRect();
       const currentScale = getTaskScale();
-
       return {
         x: (clientX - stageRect.left) / currentScale,
         y: (clientY - stageRect.top) / currentScale
@@ -526,9 +526,7 @@ class EmotionGridPlugin {
 
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        if (el.setPointerCapture) {
-          el.setPointerCapture(e.pointerId);
-        }
+        if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
         startDrag(e.clientX, e.clientY);
       });
 
@@ -654,9 +652,7 @@ EmotionGridPlugin.info = {
 /* ---------- jsPsych setup ---------- */
 
 const jsPsychInstance = initJsPsych({
-  on_finish: function() {
-    // manual download at end
-  }
+  on_finish: function() {}
 });
 
 const allImagesToPreload = [
@@ -669,28 +665,45 @@ const preload_trial = {
   images: allImagesToPreload
 };
 
-const intro_trial = {
+const orientation_page = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:22px; line-height:1.5; max-width:900px; margin:auto; padding:20px;">
+    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
       <p><b>This task works best in landscape orientation.</b></p>
       <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
+    </div>
+  `,
+  choices: ["Continue"]
+};
+
+const overview_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
       <p>You will first complete <b>1 practice trial</b>.</p>
       <p>After that, you will complete <b>2 blocks</b> of trials, with <b>3 trials per block</b>.</p>
+    </div>
+  `,
+  choices: ["Continue"]
+};
+
+const task_instruction_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
       <p>On each trial, drag all pictures into the grid and arrange them however you think is best.</p>
       <p>All pictures must end up <b>inside the grid</b>, and each square can hold only <b>one</b> picture.</p>
       <p>When you are done, tap <b>Continue</b>.</p>
     </div>
   `,
-  choices: ["Begin"]
+  choices: ["Continue"]
 };
 
 const practice_intro = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:24px; line-height:1.5; padding:20px;">
-      Practice Trial<br><br>
-      Tap below to begin.
+      Practice Trial
     </div>
   `,
   choices: ["Start Practice"]
@@ -710,9 +723,7 @@ const main_intro = {
   stimulus: `
     <div style="font-size:24px; line-height:1.5; padding:20px;">
       The practice trial is complete.<br><br>
-      You will now begin the main task.<br><br>
-      There are <b>2 blocks</b>, with <b>3 trials per block</b>.<br><br>
-      Tap below to continue.
+      You will now begin the main task.
     </div>
   `,
   choices: ["Start Main Task"]
@@ -720,7 +731,9 @@ const main_intro = {
 
 const timeline = [
   preload_trial,
-  intro_trial,
+  orientation_page,
+  overview_page,
+  task_instruction_page,
   practice_intro,
   practice_trial,
   main_intro
@@ -734,8 +747,7 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
     stimulus: `
       <div style="font-size:24px; line-height:1.5; padding:20px;">
         Block ${b + 1} of ${NUM_BLOCKS}<br><br>
-        This block has ${TRIALS_PER_BLOCK} trials.<br><br>
-        Tap below to begin.
+        This block has ${TRIALS_PER_BLOCK} trials.
       </div>
     `,
     choices: ["Begin Block"]
@@ -753,36 +765,41 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
       total_trials_in_block: TRIALS_PER_BLOCK,
       images: MAIN_BLOCKS[b][t]
     });
-
     globalTrialNumber++;
   }
 }
 
-timeline.push({
+const download_page = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:26px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
       Done. Thank you!<br><br>
-      Tap <b>Download CSV</b> below to save your data.<br><br>
-      Then tap <b>Finish</b>.
+      Tap below to download your CSV file.
     </div>
   `,
-  choices: ["Download CSV", "Finish"],
-  on_finish: function(data) {
-    if (data.response === 0) {
-      const rows = [];
-
-      jsPsychInstance.data.get().values().forEach(d => {
-        if (d.placements) {
-          d.placements.forEach(row => rows.push(row));
-        }
-      });
-
-      if (rows.length > 0) {
-        downloadCSV(`${DEMO_PARTICIPANT}_emotion_grid_demo.csv`, rows);
-      }
+  choices: ["Download CSV"],
+  on_finish: function() {
+    const rows = [];
+    jsPsychInstance.data.get().values().forEach(d => {
+      if (d.placements) d.placements.forEach(row => rows.push(row));
+    });
+    if (rows.length > 0) {
+      downloadCSV(`${DEMO_PARTICIPANT}_emotion_grid_demo.csv`, rows);
     }
   }
-});
+};
+
+const finish_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="font-size:26px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
+      Your data file should now be downloaded.<br><br>
+      Tap below to finish.
+    </div>
+  `,
+  choices: ["Finish"]
+};
+
+timeline.push(download_page, finish_page);
 
 jsPsychInstance.run(timeline);
