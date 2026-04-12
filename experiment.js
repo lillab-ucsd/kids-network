@@ -116,7 +116,8 @@ const CELL_SIZE = 92;
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 150;
+
+const BOTTOM_AREA = 185;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 80;
@@ -126,8 +127,9 @@ const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
 const GRID_Y = 58;
 
 const TITLE_Y = 14;
-const WARNING_Y = 655;
-const BUTTON_Y = 700;
+const WARNING_Y = 645;
+const BUTTON_Y = 720;
+
 
 /* ---------- minimal CSS ---------- */
 
@@ -183,9 +185,9 @@ function getTaskScale() {
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 86;
+  const spacingY = 92;
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 38;
+  const startY = GRID_Y + GRID_HEIGHT + 30;
 
   const out = [];
   for (let i = 0; i < numImages; i++) {
@@ -350,11 +352,10 @@ class EmotionGridPlugin {
 
           <button id="continue-btn" class="task-btn" style="
             position: absolute;
-            left: ${(BASE_TASK_WIDTH - 150) / 2}px;
+            left: ${(BASE_TASK_WIDTH - 140) / 2}px;
             top: ${BUTTON_Y}px;
-            width: 150px;
-            height: 46px;
-            z-index: 3;
+            width: 140px;
+            height: 42px;
           ">
             Continue
           </button>
