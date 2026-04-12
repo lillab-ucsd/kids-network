@@ -1,11 +1,7 @@
 /*************************************************
  * KIDS SEMANTIC NETWORK DEMO
  * Fixed-stage scaled version for iPad
- * Smaller left panel, bigger grid, no in-trial instructions
- * Updated:
- * - more space for start images
- * - no image overlap in bottom rows
- * - warning and Continue button moved upward
+ * Clean left panel: title + warning + button only
  *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
@@ -126,7 +122,6 @@ const CELL_SIZE = 96;
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-/* increased from 140 so 2 rows fit comfortably */
 const BOTTOM_AREA = 185;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
@@ -136,17 +131,11 @@ const CONFLICT_OFFSET = 40;
 /* ---------- Layout positions inside fixed stage ---------- */
 
 const LEFT_PANEL_X = 28;
+const LEFT_PANEL_Y = 70;
 const LEFT_PANEL_W = 230;
 
 const GRID_X = 270;
 const GRID_Y = 28;
-
-/* moved warning/button upward and widened warning area */
-const WARNING_X = 28;
-const WARNING_Y = 185;
-
-const CONTINUE_X = 55;
-const CONTINUE_Y = 305;
 
 /* ---------- Global CSS ---------- */
 
@@ -234,8 +223,6 @@ function getTaskScale() {
 
 function getStartPositions(numImages) {
   const cols = 6;
-
-  // increased vertical spacing so the 2 rows do not overlap
   const spacingX = GRID_WIDTH / cols;
   const spacingY = 86;
 
@@ -376,20 +363,50 @@ class EmotionGridPlugin {
           transform-origin: center center;
           background: #f5f5f5;
         ">
-          <div style="
+          <div id="left-panel" style="
             position: absolute;
             left: ${LEFT_PANEL_X}px;
-            top: 70px;
+            top: ${LEFT_PANEL_Y}px;
             width: ${LEFT_PANEL_W}px;
-            padding: 14px 14px;
-            border: 2px solid #d7d7d7;
-            background: white;
-            font-size: 20px;
-            font-weight: 700;
-            text-align: center;
-            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+            background: transparent;
           ">
-            ${trialLabel}
+            <div style="
+              width: 100%;
+              padding: 14px 14px;
+              border: 2px solid #d7d7d7;
+              background: white;
+              font-size: 20px;
+              font-weight: 700;
+              text-align: center;
+              box-sizing: border-box;
+            ">
+              ${trialLabel}
+            </div>
+
+            <div id="warning-text" style="
+              width: 100%;
+              min-height: 96px;
+              font-size: 18px;
+              line-height: 1.25;
+              color: #b00020;
+              font-weight: 500;
+              text-align: center;
+              box-sizing: border-box;
+              padding: 6px 4px;
+              background: transparent;
+            "></div>
+
+            <button id="continue-btn" class="task-btn" style="
+              width: 175px;
+              height: 62px;
+              z-index: 2000;
+            ">
+              Continue
+            </button>
           </div>
 
           <div id="grid-container" style="
@@ -403,32 +420,6 @@ class EmotionGridPlugin {
             overflow: hidden;
             touch-action: none;
           "></div>
-
-          <div id="warning-text" style="
-            position: absolute;
-            left: ${WARNING_X}px;
-            top: ${WARNING_Y}px;
-            width: ${LEFT_PANEL_W}px;
-            min-height: 90px;
-            font-size: 18px;
-            line-height: 1.25;
-            color: #b00020;
-            font-weight: 500;
-            text-align: center;
-            box-sizing: border-box;
-            padding: 6px 4px;
-          "></div>
-
-          <button id="continue-btn" class="task-btn" style="
-            position: absolute;
-            left: ${CONTINUE_X}px;
-            top: ${CONTINUE_Y}px;
-            width: 175px;
-            height: 62px;
-            z-index: 2000;
-          ">
-            Continue
-          </button>
         </div>
       </div>
     `;
