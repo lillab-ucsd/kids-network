@@ -1,7 +1,10 @@
 /*************************************************
  * KIDS SEMANTIC NETWORK DEMO
- * Fixed-stage scaled version for iPad
- * Larger grid + one button per instruction page
+ * iPad-friendly version
+ * - Trial title on top
+ * - Warning + Continue at bottom
+ * - Grid takes most of the screen
+ * - Instruction pages are separate, one button each
  *************************************************/
 
 const DEMO_PARTICIPANT = "demo";
@@ -112,32 +115,32 @@ const MAIN_BLOCKS = [
 
 /* ---------- Fixed stage dimensions ---------- */
 
-const BASE_TASK_WIDTH = 1160;
-const BASE_TASK_HEIGHT = 720;
+const BASE_TASK_WIDTH = 1120;
+const BASE_TASK_HEIGHT = 760;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 108;
+const CELL_SIZE = 96;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-const BOTTOM_AREA = 170;
+const BOTTOM_AREA = 140;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const IMG_SIZE = 84;
+const IMG_SIZE = 82;
 const CONFLICT_OFFSET = 42;
 
-/* ---------- Layout positions inside fixed stage ---------- */
+/* ---------- Layout inside stage ---------- */
 
-const LEFT_PANEL_X = 20;
-const LEFT_PANEL_Y = 52;
-const LEFT_PANEL_W = 165;
+const GRID_X = 80;
+const GRID_Y = 70;
 
-const GRID_X = 205;
-const GRID_Y = 12;
+const TITLE_Y = 18;
+const WARNING_Y = 665;
+const BUTTON_Y = 705;
 
-/* ---------- Global CSS ---------- */
+/* ---------- Minimal global CSS ---------- */
 
 (function injectGlobalStyles() {
   const style = document.createElement("style");
@@ -150,38 +153,6 @@ const GRID_Y = 12;
       overflow: hidden;
       background: #f5f5f5;
       font-family: Arial, sans-serif;
-    }
-
-    .jspsych-display-element,
-    .jspsych-content-wrapper,
-    .jspsych-content {
-      width: 100vw !important;
-      height: 100vh !important;
-      max-width: none !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      overflow: hidden !important;
-      box-sizing: border-box !important;
-    }
-
-    .jspsych-content-wrapper,
-    .jspsych-content {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-    }
-
-    .task-btn {
-      font-size: 22px;
-      padding: 12px 26px;
-      border-radius: 14px;
-      border: 1px solid #888;
-      background: white;
-      cursor: pointer;
-    }
-
-    .task-btn:active {
-      transform: scale(0.98);
     }
 
     .stim-img {
@@ -202,6 +173,19 @@ const GRID_Y = 12;
       position: absolute;
       background: #cfcfcf;
       pointer-events: none;
+    }
+
+    .task-btn {
+      font-size: 20px;
+      padding: 10px 22px;
+      border-radius: 14px;
+      border: 1px solid #888;
+      background: white;
+      cursor: pointer;
+    }
+
+    .task-btn:active {
+      transform: scale(0.98);
     }
   `;
   document.head.appendChild(style);
@@ -224,16 +208,17 @@ function getTaskScale() {
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 92;
+  const spacingY = 88;
 
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 42;
+  const startY = GRID_Y + GRID_HEIGHT + 38;
 
   const positions = [];
 
   for (let i = 0; i < numImages; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
+
     positions.push({
       x: startX + col * spacingX,
       y: startY + row * spacingY
@@ -362,52 +347,16 @@ class EmotionGridPlugin {
           transform-origin: center center;
           background: #f5f5f5;
         ">
-          <div id="left-panel" style="
+          <div style="
             position: absolute;
-            left: ${LEFT_PANEL_X}px;
-            top: ${LEFT_PANEL_Y}px;
-            width: ${LEFT_PANEL_W}px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 14px;
-            background: transparent;
+            left: 0;
+            top: ${TITLE_Y}px;
+            width: ${BASE_TASK_WIDTH}px;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
           ">
-            <div style="
-              width: 100%;
-              padding: 12px 10px;
-              border: 2px solid #d7d7d7;
-              background: white;
-              font-size: 17px;
-              font-weight: 700;
-              text-align: center;
-              line-height: 1.25;
-              box-sizing: border-box;
-            ">
-              ${trialLabel}
-            </div>
-
-            <div id="warning-text" style="
-              width: 100%;
-              min-height: 82px;
-              font-size: 16px;
-              line-height: 1.2;
-              color: #b00020;
-              font-weight: 500;
-              text-align: center;
-              box-sizing: border-box;
-              padding: 4px 2px;
-              background: transparent;
-            "></div>
-
-            <button id="continue-btn" class="task-btn" style="
-              width: 150px;
-              height: 56px;
-              font-size: 18px;
-              z-index: 2000;
-            ">
-              Continue
-            </button>
+            ${trialLabel}
           </div>
 
           <div id="grid-container" style="
@@ -421,6 +370,29 @@ class EmotionGridPlugin {
             overflow: hidden;
             touch-action: none;
           "></div>
+
+          <div id="warning-text" style="
+            position: absolute;
+            left: 0;
+            top: ${WARNING_Y}px;
+            width: ${BASE_TASK_WIDTH}px;
+            min-height: 30px;
+            font-size: 18px;
+            line-height: 1.2;
+            color: #b00020;
+            font-weight: 500;
+            text-align: center;
+          "></div>
+
+          <button id="continue-btn" class="task-btn" style="
+            position: absolute;
+            left: ${(BASE_TASK_WIDTH - 160) / 2}px;
+            top: ${BUTTON_Y}px;
+            width: 160px;
+            height: 50px;
+          ">
+            Continue
+          </button>
         </div>
       </div>
     `;
@@ -461,6 +433,7 @@ class EmotionGridPlugin {
     function getStagePointFromClient(clientX, clientY) {
       const stageRect = stage.getBoundingClientRect();
       const currentScale = getTaskScale();
+
       return {
         x: (clientX - stageRect.left) / currentScale,
         y: (clientY - stageRect.top) / currentScale
