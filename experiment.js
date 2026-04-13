@@ -107,7 +107,7 @@ const MAIN_BLOCKS = [
 /* ---------- fixed stage ---------- */
 
 const BASE_TASK_WIDTH = 1120;
-const BASE_TASK_HEIGHT = 700;
+const BASE_TASK_HEIGHT = 760;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
@@ -117,14 +117,14 @@ const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
 
-const BOTTOM_AREA = 150;
+const BOTTOM_AREA = 135;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 80;
 const CONFLICT_OFFSET = 42;
 
 const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
-const GRID_Y = 72;
+const GRID_Y = 60;
 
 const WARNING_Y = 655;
 const TOPBAR_Y = 14;
@@ -184,9 +184,9 @@ function getTaskScale() {
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 92;
+  const spacingY = 74;
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 25;
+  const startY = GRID_Y + GRID_HEIGHT + 18;
 
   const out = [];
   for (let i = 0; i < numImages; i++) {
@@ -318,8 +318,8 @@ display_element.innerHTML = `
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 24px;
-        z-index: 3;
+        gap: 20px;
+        z-index: 5;
       ">
         <div style="
           font-size: 18px;
@@ -331,7 +331,7 @@ display_element.innerHTML = `
 
         <button id="continue-btn" class="task-btn" style="
           width: 150px;
-          height: 46px;
+          height: 44px;
         ">
           Continue
         </button>
@@ -355,13 +355,13 @@ display_element.innerHTML = `
         left: 0;
         top: ${WARNING_Y}px;
         width: ${BASE_TASK_WIDTH}px;
-        min-height: 26px;
+        min-height: 24px;
         text-align: center;
         font-size: 16px;
         line-height: 1.2;
         color: #b00020;
         font-weight: 500;
-        z-index: 2;
+        z-index: 4;
       "></div>
     </div>
   </div>
