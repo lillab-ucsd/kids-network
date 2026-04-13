@@ -107,17 +107,17 @@ const MAIN_BLOCKS = [
 /* ---------- fixed stage ---------- */
 
 const BASE_TASK_WIDTH = 1120;
-const BASE_TASK_HEIGHT = 760;
+const BASE_TASK_HEIGHT = 700;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 92;
+const CELL_SIZE = 88;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
 
-const BOTTOM_AREA = 200;
+const BOTTOM_AREA = 150;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 80;
