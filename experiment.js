@@ -124,10 +124,10 @@ const IMG_SIZE = 80;
 const CONFLICT_OFFSET = 42;
 
 const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
-const GRID_Y = 60;
+const GRID_Y = 34;
 
-const WARNING_Y = 655;
-const TOPBAR_Y = 14;
+const WARNING_Y = 625;
+const TOPBAR_Y = -10;
 
 
 /* ---------- minimal CSS ---------- */
@@ -186,7 +186,7 @@ function getStartPositions(numImages) {
   const spacingX = GRID_WIDTH / cols;
   const spacingY = 74;
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 18;
+  const startY = GRID_Y + GRID_HEIGHT + 10;
 
   const out = [];
   for (let i = 0; i < numImages; i++) {
