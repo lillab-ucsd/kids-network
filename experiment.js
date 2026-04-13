@@ -117,7 +117,7 @@ const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
 
-const BOTTOM_AREA = 135;
+const BOTTOM_AREA = 150;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
 const IMG_SIZE = 80;
@@ -184,9 +184,9 @@ function getTaskScale() {
 function getStartPositions(numImages) {
   const cols = 6;
   const spacingX = GRID_WIDTH / cols;
-  const spacingY = 74;
+  const spacingY = 82;
   const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 10;
+  const startY = GRID_Y + GRID_HEIGHT + 30;
 
   const out = [];
   for (let i = 0; i < numImages; i++) {
