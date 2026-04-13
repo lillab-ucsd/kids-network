@@ -588,7 +588,10 @@ EmotionGridPlugin.info = {
 
 /* ---------- jsPsych setup ---------- */
 
-const jsPsychInstance = initJsPsych({ on_finish: function() {} });
+const jsPsychInstance = initJsPsych({
+  display_element: 'jspsych-target',
+  on_finish: function() {}
+});
 
 const allImagesToPreload = [
   ...PRACTICE_IMAGES,

@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
   <title>Kids Semantic Network Demo</title>
 
   <script src="https://unpkg.com/jspsych@7.3.4"></script>
@@ -17,9 +20,53 @@
       padding: 0;
       width: 100%;
       height: 100%;
-      background: #f5f5f5;
       overflow: hidden;
+      background: #f5f5f5;
       font-family: Arial, sans-serif;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      position: fixed;
+      inset: 0;
+    }
+
+    #jspsych-target {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #f5f5f5;
+    }
+
+    .jspsych-display-element {
+      width: 100%;
+      height: 100%;
+      overflow: hidden !important;
+    }
+
+    .jspsych-content-wrapper {
+      width: 100%;
+      height: 100%;
+      overflow: hidden !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .jspsych-content {
+      width: 100%;
+      height: 100%;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .stim-img {
@@ -48,10 +95,12 @@
       border: 1px solid #888;
       background: white;
       cursor: pointer;
+      font-family: Arial, sans-serif;
     }
   </style>
 </head>
 <body>
-  <script src="experiment.js?v=30"></script>
+  <div id="jspsych-target"></div>
+  <script src="experiment.js?v=31"></script>
 </body>
 </html>
