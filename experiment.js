@@ -274,6 +274,7 @@ class EmotionGridPlugin {
   let dragState = null;
   let warningMessage = "";
   let currentFocusIdx = 0;
+  let allImagesShown = false;
   const scale = getTaskScale();
   const jsPsych = this.jsPsych;
 
@@ -305,13 +306,32 @@ class EmotionGridPlugin {
             top: ${TOPBAR_Y}px;
             left: 0;
             width: ${BASE_TASK_WIDTH}px;
-            text-align: center;
-            font-size: 18px;
-            font-weight: 700;
-            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
             z-index: 5;
           ">
-            ${trialLabel}
+            <div style="
+              font-size: 18px;
+              font-weight: 700;
+              line-height: 1;
+            ">
+              ${trialLabel}
+            </div>
+
+            <button id="continue-btn" style="
+              width: 140px;
+              height: 42px;
+              font-size: 18px;
+              border-radius: 12px;
+              border: 1px solid #888;
+              background: white;
+              cursor: pointer;
+              display: none;
+            ">
+              Continue
+            </button>
           </div>
 
           <div id="grid-container" style="
@@ -347,6 +367,7 @@ class EmotionGridPlugin {
     const stage = display_element.querySelector("#task-stage");
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
+    const continueBtn = display_element.querySelector("#continue-btn");
 
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
@@ -389,7 +410,7 @@ class EmotionGridPlugin {
 
     function getDisplaySize(item) {
       const isDragging = dragState && dragState.index === item.index;
-      const isFocal = item.path === getCurrentFocusPath();
+      const isFocal = !allImagesShown && item.path === getCurrentFocusPath();
 
       if (isDragging) return Math.round(SMALL_SIZE * DRAG_SCALE);
       if (isFocal) return Math.round(SMALL_SIZE * FOCAL_SCALE);
@@ -474,7 +495,15 @@ class EmotionGridPlugin {
         warningMessage = "";
         renderImages();
       } else {
-        finishWholeTrial();
+        allImagesShown = true;
+        warningMessage = "You can still adjust the pictures. Tap Continue when you are finished.";
+        continueBtn.style.display = "inline-block";
+
+        // make sure the last image is fully snapped and no longer treated as focal
+        currentItem.stageX = snapped.x;
+        currentItem.stageY = snapped.y;
+
+        renderImages();
       }
     }
 
@@ -598,6 +627,18 @@ class EmotionGridPlugin {
       el.addEventListener("pointercancel", finishDrag);
     }
 
+    continueBtn.addEventListener("click", () => {
+      if (!allImagesShown) return;
+
+      if (!allIntroducedPlacedInUniqueSquares()) {
+        warningMessage = "Make sure all pictures are in different grid squares before continuing.";
+        renderImages();
+        return;
+      }
+
+      finishWholeTrial();
+    });
+
     renderImages();
   }
 }
@@ -613,6 +654,9 @@ const jsPsychInstance = initJsPsych({
   display_element: 'jspsych-target',
   on_finish: function() {}
 });
+
+const subject_id = jsPsychInstance.randomization.randomID(10);
+const filename = `${subject_id}.csv`;
 
 const allImagesToPreload = [
   ...PRACTICE_IMAGES,
@@ -745,6 +789,14 @@ const download_page = {
   }
 };
 
+const save_data = {
+  type: jsPsychPipe,
+  action: "save",
+  experiment_id: "9j5Y0g2B4xWA",
+  filename: filename,
+  data_string: () => jsPsychInstance.data.get().csv()
+};
+
 const finish_page = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
@@ -756,6 +808,6 @@ const finish_page = {
   choices: ["Finish"]
 };
 
-timeline.push(download_page, finish_page);
+timeline.push(download_page, save_data, finish_page);
 
 jsPsychInstance.run(timeline);
