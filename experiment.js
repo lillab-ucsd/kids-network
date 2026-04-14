@@ -106,31 +106,31 @@ const MAIN_BLOCKS = [
 
 /* ---------- fixed stage ---------- */
 
-const BASE_TASK_WIDTH = 1120;
+const BASE_TASK_WIDTH = 1160;
 const BASE_TASK_HEIGHT = 760;
 
 const GRID_COLS = 10;
 const GRID_ROWS = 6;
-const CELL_SIZE = 88;
+const CELL_SIZE = 104;
 
 const GRID_WIDTH = GRID_COLS * CELL_SIZE;
 const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 
-
-const BOTTOM_AREA = 150;
+const BOTTOM_AREA = 0;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const IMG_SIZE = 80;
+const SMALL_SIZE = 80;
+const FOCAL_SCALE = 1.5;
+const DRAG_SCALE = 1.5;
 const CONFLICT_OFFSET = 42;
 
 const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
-const GRID_Y = 34;
+const GRID_Y = 52;
 
-const WARNING_Y = 625;
-const TOPBAR_Y = -10;
+const WARNING_Y = 690;
+const TOPBAR_Y = 10;
 
-
-/* ---------- minimal CSS ---------- */
+/* ---------- CSS ---------- */
 
 (function injectStyles() {
   const style = document.createElement("style");
@@ -151,6 +151,7 @@ const TOPBAR_Y = -10;
       touch-action: none;
       -webkit-user-drag: none;
       user-select: none;
+      transition: width 120ms ease, height 120ms ease;
     }
 
     .stim-img.dragging {
@@ -163,14 +164,6 @@ const TOPBAR_Y = -10;
       background: #cfcfcf;
       pointer-events: none;
     }
-
-    .task-btn {
-      font-size: 18px;
-      border-radius: 12px;
-      border: 1px solid #888;
-      background: white;
-      cursor: pointer;
-    }
   `;
   document.head.appendChild(style);
 })();
@@ -181,23 +174,11 @@ function getTaskScale() {
   return Math.min(vw / BASE_TASK_WIDTH, vh / BASE_TASK_HEIGHT, 1);
 }
 
-function getStartPositions(numImages) {
-  const cols = 6;
-  const spacingX = GRID_WIDTH / cols;
-  const spacingY = 82;
-  const startX = GRID_X + spacingX / 2;
-  const startY = GRID_Y + GRID_HEIGHT + 30;
-
-  const out = [];
-  for (let i = 0; i < numImages; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    out.push({
-      x: startX + col * spacingX,
-      y: startY + row * spacingY
-    });
-  }
-  return out;
+function getSingleStartPosition() {
+  return {
+    x: GRID_X + GRID_WIDTH / 2,
+    y: GRID_Y + GRID_HEIGHT / 2
+  };
 }
 
 function getFileName(path) {
@@ -268,109 +249,104 @@ class EmotionGridPlugin {
   }
 
   trial(display_element, trial) {
-    const participant = trial.participant;
-    const phase = trial.phase;
-    const trialNumber = trial.trial_number;
-    const trialImages = trial.images;
-    const blockNumber = trial.block_number ?? null;
-    const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
-    const totalTrialsInBlock = trial.total_trials_in_block ?? trial.total_trials;
+  const participant = trial.participant;
+  const phase = trial.phase;
+  const trialNumber = trial.trial_number;
+  const trialImages = trial.images;
+  const blockNumber = trial.block_number ?? null;
+  const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
+  const totalTrialsInBlock = trial.total_trials_in_block ?? trial.total_trials;
 
-    const trialLabel =
-      phase === "practice"
-        ? "Practice Trial"
-        : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
+  const trialLabel =
+    phase === "practice"
+      ? "Practice Trial"
+      : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
 
-    const imageState = trialImages.map((imgPath, i) => ({
-      path: imgPath,
-      stageX: 0,
-      stageY: 0,
-      index: i
-    }));
+  const imageState = trialImages.map((imgPath, i) => ({
+    path: imgPath,
+    stageX: 0,
+    stageY: 0,
+    index: i,
+    introduced: false,
+    hasBeenMoved: false
+  }));
 
-    let dragState = null;
-    let warningMessage = "";
-    const scale = getTaskScale();
+  let dragState = null;
+  let warningMessage = "";
+  let currentFocusIdx = 0;
+  const scale = getTaskScale();
+  const jsPsych = this.jsPsych;
 
-display_element.innerHTML = `
-  <div style="
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f5f5f5;
-    overflow: hidden;
-  ">
-    <div id="task-stage" style="
-      width: ${BASE_TASK_WIDTH}px;
-      height: ${BASE_TASK_HEIGHT}px;
-      position: relative;
-      transform: scale(${scale});
-      transform-origin: center center;
-      background: #f5f5f5;
-    ">
+    imageState[0].introduced = true;
+    const firstPos = getSingleStartPosition();
+    imageState[0].stageX = firstPos.x;
+    imageState[0].stageY = firstPos.y;
+
+    display_element.innerHTML = `
       <div style="
-        position: absolute;
-        top: ${TOPBAR_Y}px;
-        left: 0;
-        width: ${BASE_TASK_WIDTH}px;
+        width: 100vw;
+        height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 20px;
-        z-index: 5;
-      ">
-        <div style="
-          font-size: 18px;
-          font-weight: 700;
-          line-height: 1;
-        ">
-          ${trialLabel}
-        </div>
-
-        <button id="continue-btn" class="task-btn" style="
-          width: 150px;
-          height: 44px;
-        ">
-          Continue
-        </button>
-      </div>
-
-      <div id="grid-container" style="
-        position: absolute;
-        left: ${GRID_X}px;
-        top: ${GRID_Y}px;
-        width: ${GRID_WIDTH}px;
-        height: ${CONTAINER_HEIGHT}px;
-        border: 3px solid #444;
-        background: white;
+        background: #f5f5f5;
         overflow: hidden;
-        touch-action: none;
-        z-index: 1;
-      "></div>
+      ">
+        <div id="task-stage" style="
+          width: ${BASE_TASK_WIDTH}px;
+          height: ${BASE_TASK_HEIGHT}px;
+          position: relative;
+          transform: scale(${scale});
+          transform-origin: center center;
+          background: #f5f5f5;
+        ">
+          <div style="
+            position: absolute;
+            top: ${TOPBAR_Y}px;
+            left: 0;
+            width: ${BASE_TASK_WIDTH}px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1;
+            z-index: 5;
+          ">
+            ${trialLabel}
+          </div>
 
-      <div id="warning-text" style="
-        position: absolute;
-        left: 0;
-        top: ${WARNING_Y}px;
-        width: ${BASE_TASK_WIDTH}px;
-        min-height: 24px;
-        text-align: center;
-        font-size: 16px;
-        line-height: 1.2;
-        color: #b00020;
-        font-weight: 500;
-        z-index: 4;
-      "></div>
-    </div>
-  </div>
-`;
+          <div id="grid-container" style="
+            position: absolute;
+            left: ${GRID_X}px;
+            top: ${GRID_Y}px;
+            width: ${GRID_WIDTH}px;
+            height: ${CONTAINER_HEIGHT}px;
+            border: 3px solid #444;
+            background: white;
+            overflow: hidden;
+            touch-action: none;
+            z-index: 1;
+          "></div>
+
+          <div id="warning-text" style="
+            position: absolute;
+            left: 0;
+            top: ${WARNING_Y}px;
+            width: ${BASE_TASK_WIDTH}px;
+            min-height: 26px;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.2;
+            color: #b00020;
+            font-weight: 500;
+            z-index: 4;
+          "></div>
+        </div>
+      </div>
+    `;
 
     const stage = display_element.querySelector("#task-stage");
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
-    const continueBtn = display_element.querySelector("#continue-btn");
 
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
@@ -392,12 +368,6 @@ display_element.innerHTML = `
       container.appendChild(line);
     }
 
-    const startPositions = getStartPositions(trialImages.length);
-    imageState.forEach((item, i) => {
-      item.stageX = startPositions[i].x;
-      item.stageY = startPositions[i].y;
-    });
-
     const imgEls = [];
 
     function getStagePointFromClient(clientX, clientY) {
@@ -413,14 +383,99 @@ display_element.innerHTML = `
       return nearestCellFromStagePoint(stageX, stageY);
     }
 
-    function allPlacedInUniqueSquares() {
+    function getCurrentFocusPath() {
+      return imageState[currentFocusIdx]?.path;
+    }
+
+    function getDisplaySize(item) {
+      const isDragging = dragState && dragState.index === item.index;
+      const isFocal = item.path === getCurrentFocusPath();
+
+      if (isDragging) return Math.round(SMALL_SIZE * DRAG_SCALE);
+      if (isFocal) return Math.round(SMALL_SIZE * FOCAL_SCALE);
+      return SMALL_SIZE;
+    }
+
+    function allIntroducedPlacedInUniqueSquares() {
       const occupied = [];
+
       for (const item of imageState) {
+        if (!item.introduced) continue;
         const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
         if (!snapped) return false;
         occupied.push(`${snapped.col},${snapped.row}`);
       }
-      return new Set(occupied).size === imageState.length;
+
+      return new Set(occupied).size === occupied.length;
+    }
+
+    function finishWholeTrial() {
+      const placements = imageState
+        .filter(item => item.introduced)
+        .map(item => {
+          const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
+          return {
+            participant,
+            phase,
+            block: blockNumber,
+            trial: trialNumber,
+            trial_in_block: trialNumberInBlock,
+            image: getFileName(item.path),
+            final_img_pos: `(${Math.round(item.stageX)}, ${Math.round(item.stageY)})`,
+            posX: Math.round(item.stageX),
+            posY: Math.round(item.stageY),
+            grid_col: snapped.col + 1,
+            grid_row: snapped.row + 1,
+            introduction_order: item.index + 1
+          };
+        });
+
+      display_element.innerHTML = "";
+
+      jsPsych.finishTrial({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        trial_in_block: trialNumberInBlock,
+        placements
+      });
+    }
+
+    function introduceNextImage() {
+      if (currentFocusIdx >= imageState.length - 1) return false;
+
+      currentFocusIdx += 1;
+      imageState[currentFocusIdx].introduced = true;
+
+      const pos = getSingleStartPosition();
+      imageState[currentFocusIdx].stageX = pos.x;
+      imageState[currentFocusIdx].stageY = pos.y;
+
+      return true;
+    }
+
+    function maybeAdvanceAfterPlacement(index) {
+      if (index !== currentFocusIdx) return;
+
+      if (!imageState[index].hasBeenMoved) return;
+
+      const currentItem = imageState[currentFocusIdx];
+      const snapped = getSnappedCellOrNull(currentItem.stageX, currentItem.stageY);
+      if (!snapped) return;
+
+      currentItem.stageX = snapped.x;
+      currentItem.stageY = snapped.y;
+
+      if (!allIntroducedPlacedInUniqueSquares()) return;
+
+      const hasNext = introduceNextImage();
+      if (hasNext) {
+        warningMessage = "";
+        renderImages();
+      } else {
+        finishWholeTrial();
+      }
     }
 
     function renderImages() {
@@ -428,12 +483,16 @@ display_element.innerHTML = `
       imgEls.length = 0;
 
       imageState.forEach((item, index) => {
+        if (!item.introduced) return;
+
         const el = document.createElement("img");
         el.className = "stim-img";
         el.src = item.path;
         el.draggable = false;
-        el.style.width = `${IMG_SIZE}px`;
-        el.style.height = `${IMG_SIZE}px`;
+
+        const size = getDisplaySize(item);
+        el.style.width = `${size}px`;
+        el.style.height = `${size}px`;
         el.style.left = `${item.stageX - GRID_X}px`;
         el.style.top = `${item.stageY - GRID_Y}px`;
 
@@ -443,13 +502,6 @@ display_element.innerHTML = `
       });
 
       warningEl.textContent = warningMessage;
-    }
-
-    function updateOnePosition(index) {
-      const el = imgEls[index];
-      if (!el) return;
-      el.style.left = `${imageState[index].stageX - GRID_X}px`;
-      el.style.top = `${imageState[index].stageY - GRID_Y}px`;
     }
 
     function attachDragHandlers(el, index) {
@@ -467,6 +519,7 @@ display_element.innerHTML = `
         e.preventDefault();
         if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
         startDrag(e.clientX, e.clientY);
+        renderImages();
       });
 
       el.addEventListener("pointermove", (e) => {
@@ -476,12 +529,18 @@ display_element.innerHTML = `
         let stageX = p.x - dragState.offsetX;
         let stageY = p.y - dragState.offsetY;
 
-        stageX = clamp(stageX, GRID_X + IMG_SIZE / 2, GRID_X + GRID_WIDTH - IMG_SIZE / 2);
-        stageY = clamp(stageY, GRID_Y + IMG_SIZE / 2, GRID_Y + CONTAINER_HEIGHT - IMG_SIZE / 2);
+        const currentSize = getDisplaySize(imageState[index]);
+        stageX = clamp(stageX, GRID_X + currentSize / 2, GRID_X + GRID_WIDTH - currentSize / 2);
+        stageY = clamp(stageY, GRID_Y + currentSize / 2, GRID_Y + CONTAINER_HEIGHT - currentSize / 2);
 
         imageState[index].stageX = stageX;
         imageState[index].stageY = stageY;
-        updateOnePosition(index);
+        imageState[index].hasBeenMoved = true;
+
+        el.style.width = `${currentSize}px`;
+        el.style.height = `${currentSize}px`;
+        el.style.left = `${imageState[index].stageX - GRID_X}px`;
+        el.style.top = `${imageState[index].stageY - GRID_Y}px`;
       });
 
       const finishDrag = () => {
@@ -501,7 +560,7 @@ display_element.innerHTML = `
 
         let occupied = false;
         for (let i = 0; i < imageState.length; i++) {
-          if (i === index) continue;
+          if (i === index || !imageState[i].introduced) continue;
           const otherSnapped = getSnappedCellOrNull(imageState[i].stageX, imageState[i].stageY);
           if (sameCell(otherSnapped, snapped)) {
             occupied = true;
@@ -512,70 +571,32 @@ display_element.innerHTML = `
         if (occupied) {
           imageState[index].stageX = clamp(
             currentX + CONFLICT_OFFSET,
-            GRID_X + IMG_SIZE / 2,
-            GRID_X + GRID_WIDTH - IMG_SIZE / 2
+            GRID_X + SMALL_SIZE / 2,
+            GRID_X + GRID_WIDTH - SMALL_SIZE / 2
           );
           imageState[index].stageY = clamp(
             currentY + CONFLICT_OFFSET,
-            GRID_Y + IMG_SIZE / 2,
-            GRID_Y + CONTAINER_HEIGHT - IMG_SIZE / 2
+            GRID_Y + SMALL_SIZE / 2,
+            GRID_Y + CONTAINER_HEIGHT - SMALL_SIZE / 2
           );
           warningMessage = "That square is already occupied.";
-        } else {
-          imageState[index].stageX = snapped.x;
-          imageState[index].stageY = snapped.y;
-          warningMessage = "";
+          dragState = null;
+          renderImages();
+          return;
         }
 
+        imageState[index].stageX = snapped.x;
+        imageState[index].stageY = snapped.y;
+        warningMessage = "";
         dragState = null;
+
+        maybeAdvanceAfterPlacement(index);
         renderImages();
       };
 
       el.addEventListener("pointerup", finishDrag);
       el.addEventListener("pointercancel", finishDrag);
     }
-
-    continueBtn.addEventListener("click", () => {
-      if (!allPlacedInUniqueSquares()) {
-        warningMessage = `Place all ${trialImages.length} pictures into different grid squares first.`;
-        renderImages();
-        return;
-      }
-
-      imageState.forEach(item => {
-        const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
-        item.stageX = snapped.x;
-        item.stageY = snapped.y;
-      });
-
-      const placements = imageState.map(item => {
-        const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
-        return {
-          participant,
-          phase,
-          block: blockNumber,
-          trial: trialNumber,
-          trial_in_block: trialNumberInBlock,
-          image: getFileName(item.path),
-          final_img_pos: `(${Math.round(item.stageX)}, ${Math.round(item.stageY)})`,
-          posX: Math.round(item.stageX),
-          posY: Math.round(item.stageY),
-          grid_col: snapped.col + 1,
-          grid_row: snapped.row + 1
-        };
-      });
-
-      display_element.innerHTML = "";
-
-      this.jsPsych.finishTrial({
-        participant,
-        phase,
-        block: blockNumber,
-        trial: trialNumber,
-        trial_in_block: trialNumberInBlock,
-        placements
-      });
-    });
 
     renderImages();
   }
@@ -629,9 +650,10 @@ const task_instruction_page = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
-      <p>On each trial, drag all pictures into the grid and arrange them however you think is best.</p>
-      <p>All pictures must end up <b>inside the grid</b>, and each square can hold only <b>one</b> picture.</p>
-      <p>When you are done, tap <b>Continue</b>.</p>
+      <p>One picture will appear at a time.</p>
+      <p>Place the current picture into the grid based on how it belongs with the pictures already shown.</p>
+      <p>You can still move the earlier pictures if you want to adjust your arrangement.</p>
+      <p>As soon as you place the current picture into the grid, the next picture will appear automatically.</p>
     </div>
   `,
   choices: ["Continue"]
