@@ -275,6 +275,25 @@ class EmotionGridPlugin {
   let warningMessage = "";
   let currentFocusIdx = 0;
   let allImagesShown = false;
+
+  const moveLog = [];
+
+function logMove(eventType, index, extra = {}) {
+  const item = imageState[index];
+  const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
+
+  moveLog.push({
+    image_name: getFileName(imageState[index].path),
+    trial: trialNumber,
+    block: blockNumber,
+    phase,
+    grid_col: snapped.col + 1,
+    grid_row: snapped.row + 1,
+    posX: Math.round(snapped.x),
+    posY: Math.round(snapped.y),
+    timestamp: performance.now()
+  });
+}
   const scale = getTaskScale();
   const jsPsych = this.jsPsych;
 
@@ -451,6 +470,7 @@ class EmotionGridPlugin {
           };
         });
 
+
       display_element.innerHTML = "";
 
       jsPsych.finishTrial({
@@ -459,7 +479,8 @@ class EmotionGridPlugin {
         block: blockNumber,
         trial: trialNumber,
         trial_in_block: trialNumberInBlock,
-        placements
+        placements,
+        move_log: moveLog
       });
     }
 
@@ -616,6 +637,7 @@ class EmotionGridPlugin {
 
         imageState[index].stageX = snapped.x;
         imageState[index].stageY = snapped.y;
+        logMove("placement", index);
         warningMessage = "";
         dragState = null;
 
