@@ -387,6 +387,7 @@ function logMove(eventType, index, extra = {}) {
     const container = display_element.querySelector("#grid-container");
     const warningEl = display_element.querySelector("#warning-text");
     const continueBtn = display_element.querySelector("#continue-btn");
+    container.style.touchAction = "none";
 
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
@@ -565,9 +566,13 @@ function logMove(eventType, index, extra = {}) {
         el.classList.add("dragging");
       };
 
-      el.addEventListener("pointerdown", (e) => {
+     el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+
+        if (stage.setPointerCapture) {
+          stage.setPointerCapture(e.pointerId);
+        }
+
         startDrag(e.clientX, e.clientY);
         renderImages();
       });
