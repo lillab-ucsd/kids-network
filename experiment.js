@@ -765,25 +765,6 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
   }
 }
 
-const download_page = {
-  type: jsPsychHtmlButtonResponse,
-  stimulus: `
-    <div style="font-size:26px; line-height:1.55; max-width:900px; margin:auto; padding:20px;">
-      Done. Thank you!<br><br>
-      Tap below to download your CSV file.
-    </div>
-  `,
-  choices: ["Download CSV"],
-  on_finish: function() {
-    const rows = [];
-    jsPsychInstance.data.get().values().forEach(d => {
-      if (d.placements) d.placements.forEach(row => rows.push(row));
-    });
-    if (rows.length > 0) {
-      downloadCSV(`${DEMO_PARTICIPANT}_emotion_grid_demo.csv`, rows);
-    }
-  }
-};
 
 const save_data = {
   type: jsPsychPipe,
@@ -804,6 +785,6 @@ const finish_page = {
   choices: ["Finish"]
 };
 
-timeline.push(download_page, save_data, finish_page);
+timeline.push(save_data, finish_page);
 
 jsPsychInstance.run(timeline);
