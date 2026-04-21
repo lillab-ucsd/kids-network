@@ -556,103 +556,72 @@ function logMove(eventType, index, extra = {}) {
     }
 
     function attachDragHandlers(el, index) {
-      const startDrag = (clientX, clientY) => {
-        const p = getStagePointFromClient(clientX, clientY);
+
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+
+        const p = getStagePointFromClient(e.clientX, e.clientY);
+
         dragState = {
           index,
           offsetX: p.x - imageState[index].stageX,
           offsetY: p.y - imageState[index].stageY
         };
-        el.classList.add("dragging");
-      };
-
-     el.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
 
         if (stage.setPointerCapture) {
           stage.setPointerCapture(e.pointerId);
         }
-
-        startDrag(e.clientX, e.clientY);
-        renderImages();
       });
 
-      el.addEventListener("pointermove", (e) => {
-        if (!dragState || dragState.index !== index) return;
-        const p = getStagePointFromClient(e.clientX, e.clientY);
-
-        let stageX = p.x - dragState.offsetX;
-        let stageY = p.y - dragState.offsetY;
-
-        const currentSize = getDisplaySize(imageState[index]);
-        stageX = clamp(stageX, GRID_X + currentSize / 2, GRID_X + GRID_WIDTH - currentSize / 2);
-        stageY = clamp(stageY, GRID_Y + currentSize / 2, GRID_Y + CONTAINER_HEIGHT - currentSize / 2);
-
-        imageState[index].stageX = stageX;
-        imageState[index].stageY = stageY;
-        imageState[index].hasBeenMoved = true;
-
-        el.style.width = `${currentSize}px`;
-        el.style.height = `${currentSize}px`;
-        el.style.left = `${imageState[index].stageX - GRID_X}px`;
-        el.style.top = `${imageState[index].stageY - GRID_Y}px`;
-      });
-
-      const finishDrag = () => {
-        if (!dragState || dragState.index !== index) return;
-        el.classList.remove("dragging");
-
-        const currentX = imageState[index].stageX;
-        const currentY = imageState[index].stageY;
-        const snapped = getSnappedCellOrNull(currentX, currentY);
-
-        if (!snapped) {
-          warningMessage = "Each picture must end inside the grid.";
-          dragState = null;
-          renderImages();
-          return;
-        }
-
-        let occupied = false;
-        for (let i = 0; i < imageState.length; i++) {
-          if (i === index || !imageState[i].introduced) continue;
-          const otherSnapped = getSnappedCellOrNull(imageState[i].stageX, imageState[i].stageY);
-          if (sameCell(otherSnapped, snapped)) {
-            occupied = true;
-            break;
-          }
-        }
-
-        if (occupied) {
-          imageState[index].stageX = clamp(
-            currentX + CONFLICT_OFFSET,
-            GRID_X + SMALL_SIZE / 2,
-            GRID_X + GRID_WIDTH - SMALL_SIZE / 2
-          );
-          imageState[index].stageY = clamp(
-            currentY + CONFLICT_OFFSET,
-            GRID_Y + SMALL_SIZE / 2,
-            GRID_Y + CONTAINER_HEIGHT - SMALL_SIZE / 2
-          );
-          warningMessage = "That square is already occupied.";
-          dragState = null;
-          renderImages();
-          return;
-        }
-
-        imageState[index].stageX = snapped.x;
-        imageState[index].stageY = snapped.y;
-        logMove("placement", index);
-        warningMessage = "";
-        dragState = null;
-
-        maybeAdvanceAfterPlacement(index);
-        renderImages();
-      };
-
-      el.addEventListener("pointerup", finishDrag);
-      el.addEventListener("pointercancel", finishDrag);
     }
+
+    stage.addEventListener("pointermove", (e) => {
+      if (!dragState) return;
+
+      const index = dragState.index;
+      const p = getStagePointFromClient(e.clientX, e.clientY);
+
+      let stageX = p.x - dragState.offsetX;
+      let stageY = p.y - dragState.offsetY;
+
+      const currentSize = SMALL_SIZE;
+
+      stageX = clamp(stageX, GRID_X + currentSize / 2, GRID_X + GRID_WIDTH - currentSize / 2);
+      stageY = clamp(stageY, GRID_Y + currentSize / 2, GRID_Y + CONTAINER_HEIGHT - currentSize / 2);
+
+      imageState[index].stageX = stageX;
+      imageState[index].stageY = stageY;
+
+      renderImages();
+    });
+
+    stage.addEventListener("pointerup", (e) => {
+      if (!dragState) return;
+
+      const index = dragState.index;
+      dragState = null;
+
+      const snapped = getSnappedCellOrNull(
+        imageState[index].stageX,
+        imageState[index].stageY
+      );
+
+      if (!snapped) {
+        renderImages();
+        return;
+      }
+
+      imageState[index].stageX = snapped.x;
+      imageState[index].stageY = snapped.y;
+
+      logMove("placement", index);
+
+      imageState[index].hasBeenMoved = true;
+
+      maybeAdvanceAfterPlacement(index);   // 🔥 restore this
+
+      renderImages();
+    });
 
     continueBtn.addEventListener("click", () => {
       if (!allImagesShown) return;
