@@ -6,6 +6,12 @@ const PRACTICE_IMAGES = [
   "stimuli/food/ice_cream.jpg",
   "stimuli/food/chocolate.jpg",
   "stimuli/food/ham.jpg",
+  "stimuli/food/hamburger.jpg",
+  "stimuli/food/cotton_candy.jpg",
+  "stimuli/food/french_fries.jpg",
+  "stimuli/food/pasta.jpg",
+  "stimuli/food/muffin.jpg",
+  "stimuli/food/bacon.jpg",
   "stimuli/food/salad.jpg"
 ];
 
@@ -13,10 +19,12 @@ const NUM_BLOCKS = 2;
 const TRIALS_PER_BLOCK = 3;
 const TOTAL_MAIN_TRIALS = NUM_BLOCKS * TRIALS_PER_BLOCK;
 
-const MAIN_BLOCKS = [
-  [
-    [
-      "stimuli/animals/peacock_1.jpg",
+
+/* ---------- category structure ---------- */
+
+const CATEGORIES = {
+  animals: [
+    ["stimuli/animals/peacock_1.jpg",
       "stimuli/animals/dolphin_1.jpg",
       "stimuli/animals/pigeon_1.jpg",
       "stimuli/animals/fox_1.jpg",
@@ -27,40 +35,8 @@ const MAIN_BLOCKS = [
       "stimuli/animals/squirrel_1.jpg",
       "stimuli/animals/butterfly_1.jpg",
       "stimuli/animals/ladybug_1.jpg",
-      "stimuli/animals/wolf_1.jpg"
-    ],
-    [
-      "stimuli/artifact/clock_1.jpg",
-      "stimuli/artifact/envelope_1.jpg",
-      "stimuli/artifact/fireworks_1.jpg",
-      "stimuli/artifact/flag_1.jpg",
-      "stimuli/artifact/ladder_1.jpg",
-      "stimuli/artifact/mirror_1.jpg",
-      "stimuli/artifact/snowman_1.jpg",
-      "stimuli/artifact/tent_1.jpg",
-      "stimuli/artifact/window_1.jpg",
-      "stimuli/artifact/balloon_1.jpg",
-      "stimuli/artifact/camera_1.jpg",
-      "stimuli/artifact/candle_1.jpg"
-    ],
-    [
-      "stimuli/plants/broccoli_1.jpg",
-      "stimuli/plants/cabbage_1.jpg",
-      "stimuli/plants/cactus_1.jpg",
-      "stimuli/plants/cherry_1.jpg",
-      "stimuli/plants/flower_1.jpg",
-      "stimuli/plants/grass_1.jpg",
-      "stimuli/plants/leaf_1.jpg",
-      "stimuli/plants/tree_1.jpg",
-      "stimuli/plants/acorn_1.jpg",
-      "stimuli/plants/apple_1.jpg",
-      "stimuli/plants/blueberry_1.jpg",
-      "stimuli/plants/peanut_1.jpg"
-    ]
-  ],
-  [
-    [
-      "stimuli/animals/peacock_2.jpg",
+      "stimuli/animals/wolf_1.jpg"],
+    ["stimuli/animals/peacock_2.jpg",
       "stimuli/animals/dolphin_2.jpg",
       "stimuli/animals/pigeon_2.jpg",
       "stimuli/animals/fox_2.jpg",
@@ -71,10 +47,22 @@ const MAIN_BLOCKS = [
       "stimuli/animals/squirrel_2.jpg",
       "stimuli/animals/butterfly_2.jpg",
       "stimuli/animals/ladybug_2.jpg",
-      "stimuli/animals/wolf_2.jpg"
-    ],
-    [
-      "stimuli/artifact/clock_2.jpg",
+      "stimuli/animals/wolf_2.jpg"]
+  ],
+  artifacts: [
+    ["stimuli/artifact/clock_1.jpg",
+      "stimuli/artifact/envelope_1.jpg",
+      "stimuli/artifact/fireworks_1.jpg",
+      "stimuli/artifact/flag_1.jpg",
+      "stimuli/artifact/ladder_1.jpg",
+      "stimuli/artifact/mirror_1.jpg",
+      "stimuli/artifact/snowman_1.jpg",
+      "stimuli/artifact/tent_1.jpg",
+      "stimuli/artifact/window_1.jpg",
+      "stimuli/artifact/balloon_1.jpg",
+      "stimuli/artifact/camera_1.jpg",
+      "stimuli/artifact/candle_1.jpg"],
+    ["stimuli/artifact/clock_2.jpg",
       "stimuli/artifact/envelope_2.jpg",
       "stimuli/artifact/fireworks_2.jpg",
       "stimuli/artifact/flag_2.jpg",
@@ -85,10 +73,22 @@ const MAIN_BLOCKS = [
       "stimuli/artifact/window_2.jpg",
       "stimuli/artifact/balloon_2.jpg",
       "stimuli/artifact/camera_2.jpg",
-      "stimuli/artifact/candle_2.jpg"
-    ],
-    [
-      "stimuli/plants/broccoli_2.jpg",
+      "stimuli/artifact/candle_2.jpg"]
+  ],
+  plants: [
+    ["stimuli/plants/broccoli_1.jpg",
+      "stimuli/plants/cabbage_1.jpg",
+      "stimuli/plants/cactus_1.jpg",
+      "stimuli/plants/cherry_1.jpg",
+      "stimuli/plants/flower_1.jpg",
+      "stimuli/plants/grass_1.jpg",
+      "stimuli/plants/leaf_1.jpg",
+      "stimuli/plants/tree_1.jpg",
+      "stimuli/plants/acorn_1.jpg",
+      "stimuli/plants/apple_1.jpg",
+      "stimuli/plants/blueberry_1.jpg",
+      "stimuli/plants/peanut_1.jpg"],
+    ["stimuli/plants/broccoli_2.jpg",
       "stimuli/plants/cabbage_2.jpg",
       "stimuli/plants/cactus_2.jpg",
       "stimuli/plants/cherry_2.jpg",
@@ -99,11 +99,22 @@ const MAIN_BLOCKS = [
       "stimuli/plants/acorn_2.jpg",
       "stimuli/plants/apple_2.jpg",
       "stimuli/plants/blueberry_2.jpg",
-      "stimuli/plants/peanut_2.jpg"
-    ]
+      "stimuli/plants/peanut_2.jpg"]
   ]
+};
+
+const SET_CONDITIONS = [
+  { animal: 0, plant: 0, artifact: 0 },
+  { animal: 0, plant: 0, artifact: 1 },
+  { animal: 0, plant: 1, artifact: 0 },
+  { animal: 0, plant: 1, artifact: 1 },
+  { animal: 1, plant: 0, artifact: 0 },
+  { animal: 1, plant: 0, artifact: 1 },
+  { animal: 1, plant: 1, artifact: 0 },
+  { animal: 1, plant: 1, artifact: 1 }
 ];
 
+const assignedCondition = SET_CONDITIONS[window.VERSION - 1];
 /* ---------- fixed stage ---------- */
 
 const BASE_TASK_WIDTH = 1160;
@@ -119,9 +130,9 @@ const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
 const BOTTOM_AREA = 0;
 const CONTAINER_HEIGHT = GRID_HEIGHT + BOTTOM_AREA;
 
-const SMALL_SIZE = 80;
-const FOCAL_SCALE = 1.5;
-const DRAG_SCALE = 1.5;
+const SMALL_SIZE = 90;
+const FOCAL_SCALE = 2;
+const DRAG_SCALE = 1.8;
 const CONFLICT_OFFSET = 42;
 
 const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
@@ -129,6 +140,7 @@ const GRID_Y = 52;
 
 const WARNING_Y = 690;
 const TOPBAR_Y = 10;
+
 
 /* ---------- CSS ---------- */
 
@@ -651,58 +663,148 @@ const jsPsychInstance = initJsPsych({
   on_finish: function() {}
 });
 
-const subject_id = jsPsychInstance.randomization.randomID(10);
-const filename = `${subject_id}.csv`;
+const categoryNames = Object.keys(CATEGORIES);
+const randomizedCategoryOrder =
+  jsPsychInstance.randomization.shuffle(categoryNames);
+
+/* ---------- counterbalance sets ---------- */
+
+const categorySetAssignment = {};
+
+randomizedCategoryOrder.forEach(category => {
+  const firstSetIndex = Math.random() < 0.5 ? 0 : 1;
+
+  categorySetAssignment[category] = {
+    block1: firstSetIndex,
+    block2: 1 - firstSetIndex
+  };
+});
+
+jsPsychInstance.data.addProperties({
+  category_order: randomizedCategoryOrder.join(","),
+  set_assignment: JSON.stringify(categorySetAssignment)
+});
+
+/* ---------- build MAIN_BLOCKS dynamically ---------- */
+
+const MAIN_BLOCKS = [[], []];
+
+randomizedCategoryOrder.forEach(category => {
+
+  MAIN_BLOCKS[0].push(
+    CATEGORIES[category][categorySetAssignment[category].block1]
+  );
+
+  MAIN_BLOCKS[1].push(
+    CATEGORIES[category][categorySetAssignment[category].block2]
+  );
+
+});
+
 
 const allImagesToPreload = [
   ...PRACTICE_IMAGES,
   ...MAIN_BLOCKS.flat(2)
 ];
 
+const participant_info_trial = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="font-size:26px; margin-bottom:20px;">
+      Enter Participant Information
+    </div>
+
+    <div style="margin-bottom:15px;">
+      Participant ID:<br>
+      <input id="participant-input"
+             type="text"
+             style="font-size:22px; padding:8px; width:200px;">
+    </div>
+
+    <div>
+      Version (1–8):<br>
+      <input id="version-input"
+             type="number"
+             min="1"
+             max="8"
+             style="font-size:22px; padding:8px; width:80px;">
+    </div>
+  `,
+  choices: [],
+  on_load: function() {
+
+    const btn = document.createElement("button");
+    btn.textContent = "Continue";
+    btn.style.fontSize = "22px";
+    btn.style.padding = "12px 30px";
+    btn.style.marginTop = "20px";
+    btn.style.borderRadius = "12px";
+    btn.style.cursor = "pointer";
+
+    document.querySelector(".jspsych-content").appendChild(btn);
+
+    btn.addEventListener("click", function() {
+
+      const pid = document.getElementById("participant-input").value.trim();
+      const version = parseInt(document.getElementById("version-input").value);
+
+      if (!pid) {
+        alert("Please enter participant ID.");
+        return;
+      }
+
+      if (!version || version < 1 || version > 8) {
+        alert("Version must be between 1 and 8.");
+        return;
+      }
+
+      window.PARTICIPANT_ID = pid;
+      window.VERSION = version;
+
+      jsPsychInstance.data.addProperties({
+        participant_id: pid,
+        version: version
+      });
+
+      jsPsychInstance.finishTrial();
+    });
+  }
+};
+
 const preload_trial = {
   type: jsPsychPreload,
   images: allImagesToPreload
 };
 
-const orientation_page = {
-  type: jsPsychHtmlButtonResponse,
-  stimulus: `
-    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
-      <p><b>This task works best in landscape orientation.</b></p>
-      <p>If you are using an iPad, please rotate it horizontally before continuing.</p>
-    </div>
-  `,
-  choices: ["Continue"]
-};
-
-const overview_page = {
-  type: jsPsychHtmlButtonResponse,
-  stimulus: `
-    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
-      <p>You will first complete <b>1 practice trial</b>.</p>
-      <p>After that, you will complete <b>2 blocks</b> of trials, with <b>3 trials per block</b>.</p>
-    </div>
-  `,
-  choices: ["Continue"]
-};
-
-const task_instruction_page = {
-  type: jsPsychHtmlButtonResponse,
-  stimulus: `
-    <div style="font-size:22px; line-height:1.5; max-width:850px; margin:auto; padding:20px;">
-      <p>One picture will appear at a time.</p>
-      <p>Place the current picture into the grid based on how it belongs with the pictures already shown.</p>
-      <p>You can still move the earlier pictures if you want to adjust your arrangement.</p>
-      <p>As soon as you place the current picture into the grid, the next picture will appear automatically.</p>
-    </div>
-  `,
-  choices: ["Continue"]
-};
-
 const practice_intro = {
   type: jsPsychHtmlButtonResponse,
-  stimulus: `<div style="font-size:24px; padding:20px;">Practice Trial</div>`,
-  choices: ["Start Practice"]
+  stimulus: `
+    <div style="
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      height:60vh;
+    ">
+      <button id="practice-start-btn" style="
+        font-size:28px;
+        padding:20px 50px;
+        border-radius:18px;
+        cursor:pointer;
+        background:#4CAF50;
+        color:white;
+        border:none;
+      ">
+        Start Practice
+      </button>
+    </div>
+  `,
+  choices: [],  // disable default jsPsych button
+  on_load: function() {
+    document.getElementById("practice-start-btn")
+      .addEventListener("click", function() {
+        jsPsychInstance.finishTrial();
+      });
+  }
 };
 
 const practice_trial = {
@@ -717,19 +819,74 @@ const practice_trial = {
 const main_intro = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
-    <div style="font-size:24px; line-height:1.5; padding:20px;">
-      The practice trial is complete.<br><br>
-      You will now begin the main task.
+    <div style="
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:120px 20px;
+      text-align:center;
+    ">
+      <button id="main-start-btn" style="
+        font-size:26px;
+        padding:18px 40px;
+        border-radius:16px;
+        cursor:pointer;
+        background:#4CAF50;
+        color:white;
+        border:none;
+      ">
+        Start Main Task
+      </button>
+
     </div>
   `,
-  choices: ["Start Main Task"]
+  choices: [],
+  on_load: function() {
+    document.getElementById("main-start-btn")
+      .addEventListener("click", function() {
+        jsPsychInstance.finishTrial();
+      });
+  }
 };
 
+const attention_star_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    ">
+      <img src="stimuli/star.png" style="
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      ">
+      <div style="font-size:28px; font-weight:600;">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  `,
+  choices: ["Next"]
+};
+
+
 const timeline = [
+  participant_info_trial,
   preload_trial,
-  orientation_page,
-  overview_page,
-  task_instruction_page,
   practice_intro,
   practice_trial,
   main_intro
@@ -738,18 +895,19 @@ const timeline = [
 let globalTrialNumber = 1;
 
 for (let b = 0; b < NUM_BLOCKS; b++) {
+
   timeline.push({
     type: jsPsychHtmlButtonResponse,
     stimulus: `
-      <div style="font-size:24px; line-height:1.5; padding:20px;">
-        Block ${b + 1} of ${NUM_BLOCKS}<br><br>
-        This block has ${TRIALS_PER_BLOCK} trials.
+      <div style="font-size:24px; padding:20px;">
+        Block ${b + 1} of ${NUM_BLOCKS}
       </div>
     `,
     choices: ["Begin Block"]
   });
 
   for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
+
     timeline.push({
       type: EmotionGridPlugin,
       participant: DEMO_PARTICIPANT,
@@ -761,7 +919,10 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
       total_trials_in_block: TRIALS_PER_BLOCK,
       images: MAIN_BLOCKS[b][t]
     });
+
     globalTrialNumber++;
+
+    timeline.push(attention_star_page);
   }
 }
 
@@ -770,7 +931,7 @@ const save_data = {
   type: jsPsychPipe,
   action: "save",
   experiment_id: "9j5Y0g2B4xWA",
-  filename: filename,
+  filename: () => `${window.PARTICIPANT_ID}.csv`,
   data_string: () => jsPsychInstance.data.get().csv()
 };
 
