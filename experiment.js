@@ -49,31 +49,31 @@ const CATEGORIES = {
       "stimuli/animals/ladybug_2.jpg",
       "stimuli/animals/wolf_2.jpg"]
   ],
-  artifacts: [
-    ["stimuli/artifact/clock_1.jpg",
-      "stimuli/artifact/envelope_1.jpg",
-      "stimuli/artifact/fireworks_1.jpg",
-      "stimuli/artifact/flag_1.jpg",
-      "stimuli/artifact/ladder_1.jpg",
-      "stimuli/artifact/mirror_1.jpg",
-      "stimuli/artifact/snowman_1.jpg",
-      "stimuli/artifact/tent_1.jpg",
-      "stimuli/artifact/window_1.jpg",
-      "stimuli/artifact/balloon_1.jpg",
-      "stimuli/artifact/camera_1.jpg",
-      "stimuli/artifact/candle_1.jpg"],
-    ["stimuli/artifact/clock_2.jpg",
-      "stimuli/artifact/envelope_2.jpg",
-      "stimuli/artifact/fireworks_2.jpg",
-      "stimuli/artifact/flag_2.jpg",
-      "stimuli/artifact/ladder_2.jpg",
-      "stimuli/artifact/mirror_2.jpg",
-      "stimuli/artifact/snowman_2.jpg",
-      "stimuli/artifact/tent_2.jpg",
-      "stimuli/artifact/window_2.jpg",
-      "stimuli/artifact/balloon_2.jpg",
-      "stimuli/artifact/camera_2.jpg",
-      "stimuli/artifact/candle_2.jpg"]
+  emotions: [
+    ["stimuli/emotions/happy_1.jpg",
+      "stimuli/emotions/sad_1.jpg",
+      "stimuli/emotions/angry_1.jpg",
+      "stimuli/emotions/fearful_1.jpg",
+      "stimuli/emotions/disgust_1.jpg",
+      "stimuli/emotions/surprise_1.jpg",
+      "stimuli/emotions/happy_2.jpg",
+      "stimuli/emotions/sad_2.jpg",
+      "stimuli/emotions/angry_2.jpg",
+      "stimuli/emotions/fearful_2.jpg",
+      "stimuli/emotions/disgust_2.jpg",
+      "stimuli/emotions/surprise_2.jpg"],
+    ["stimuli/emotions/happy_1.jpg",
+      "stimuli/emotions/sad_1.jpg",
+      "stimuli/emotions/angry_1.jpg",
+      "stimuli/emotions/fearful_1.jpg",
+      "stimuli/emotions/disgust_1.jpg",
+      "stimuli/emotions/surprise_1.jpg",
+      "stimuli/emotions/happy_2.jpg",
+      "stimuli/emotions/sad_2.jpg",
+      "stimuli/emotions/angry_2.jpg",
+      "stimuli/emotions/fearful_2.jpg",
+      "stimuli/emotions/disgust_2.jpg",
+      "stimuli/emotions/surprise_2.jpg"]
   ],
   plants: [
     ["stimuli/plants/broccoli_1.jpg",
@@ -114,7 +114,6 @@ const SET_CONDITIONS = [
   { animal: 1, plant: 1, artifact: 1 }
 ];
 
-const assignedCondition = SET_CONDITIONS[window.VERSION - 1];
 /* ---------- fixed stage ---------- */
 
 const BASE_TASK_WIDTH = 1160;
@@ -317,7 +316,7 @@ function logMove(eventType, index, extra = {}) {
     display_element.innerHTML = `
       <div style="
         width: 100vw;
-        height: 100vh;
+        height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -580,8 +579,8 @@ function logMove(eventType, index, extra = {}) {
           offsetY: p.y - imageState[index].stageY
         };
 
-        if (stage.setPointerCapture) {
-          stage.setPointerCapture(e.pointerId);
+        if (el.setPointerCapture) {
+          el.setPointerCapture(e.pointerId);
         }
       });
 
