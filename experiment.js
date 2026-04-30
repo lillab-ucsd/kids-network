@@ -217,6 +217,56 @@ function getCellCenter(col, row) {
   };
 }
 
+function makePreviewPage(images) {
+  return {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div style="
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        height:85vh;
+      ">
+        <div style="
+          display:grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap:24px;
+          max-width:1000px;
+          margin-bottom:40px;
+        ">
+          ${images.map(img => `
+            <img src="${img}" style="
+              width:130px;
+              height:130px;
+              object-fit:contain;
+            ">
+          `).join("")}
+        </div>
+
+        <button id="preview-start-btn" style="
+          font-size:26px;
+          padding:18px 50px;
+          border-radius:16px;
+          background:#4CAF50;
+          color:white;
+          border:none;
+          cursor:pointer;
+        ">
+          Start
+        </button>
+      </div>
+    `,
+    choices: [],  // disable default jsPsych button
+    on_load: function() {
+      document.getElementById("preview-start-btn")
+        .addEventListener("click", function() {
+          jsPsychInstance.finishTrial();
+        });
+    }
+  };
+}
+
 function nearestCellFromStagePoint(x, y) {
   const localX = x - GRID_X;
   const localY = y - GRID_Y;
@@ -496,6 +546,7 @@ function logMove(eventType, index, extra = {}) {
       jsPsych.finishTrial({
         participant,
         phase,
+        image_order: trial.image_order,
         block: blockNumber,
         trial: trialNumber,
         trial_in_block: trialNumberInBlock,
@@ -904,7 +955,9 @@ const timeline = [
   participant_info_trial,
   preload_trial,
   practice_intro,
+  makePreviewPage(MINI_PRACTICE_IMAGES),
   mini_practice_trial,
+  makePreviewPage(PRACTICE_IMAGES),
   practice_trial,
   main_intro
 ];
@@ -925,7 +978,12 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
 
   for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
 
-    timeline.push({
+    const shuffledImages =
+      jsPsychInstance.randomization.shuffle([...MAIN_BLOCKS[b][t]]);
+    
+      timeline.push(makePreviewPage(shuffledImages));
+
+      timeline.push({
       type: EmotionGridPlugin,
       participant: DEMO_PARTICIPANT,
       phase: "main",
@@ -934,7 +992,8 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
       trial_number_in_block: t + 1,
       total_trials: TOTAL_MAIN_TRIALS,
       total_trials_in_block: TRIALS_PER_BLOCK,
-      images: MAIN_BLOCKS[b][t]
+      images: shuffledImages,
+      image_order: shuffledImages
     });
 
     globalTrialNumber++;
