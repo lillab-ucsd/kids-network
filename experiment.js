@@ -1,5 +1,13 @@
 const DEMO_PARTICIPANT = "demo";
 
+const MINI_PRACTICE_IMAGES = [
+  "stimuli/animals/dog_1.jpg",
+  "stimuli/animals/dog_2.jpg",
+  "stimuli/animals/cat_1.jpg",
+  "stimuli/animals/cat_2.jpg",
+  "stimuli/artifact/snowman_1.jpg",
+];
+
 const PRACTICE_IMAGES = [
   "stimuli/food/rice.jpg",
   "stimuli/food/pizza.jpg",
@@ -806,6 +814,15 @@ const practice_intro = {
   }
 };
 
+const mini_practice_trial = {
+  type: EmotionGridPlugin,
+  participant: DEMO_PARTICIPANT,
+  phase: "practice",
+  trial_number: -1,  // distinguish from real practice
+  total_trials: 1,
+  images: MINI_PRACTICE_IMAGES
+};
+
 const practice_trial = {
   type: EmotionGridPlugin,
   participant: DEMO_PARTICIPANT,
@@ -887,6 +904,7 @@ const timeline = [
   participant_info_trial,
   preload_trial,
   practice_intro,
+  mini_practice_trial,
   practice_trial,
   main_intro
 ];
