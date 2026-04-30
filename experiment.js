@@ -1,26 +1,11 @@
 const DEMO_PARTICIPANT = "demo";
 
 const MINI_PRACTICE_IMAGES = [
-  "stimuli/animals/dog_1.jpg",
-  "stimuli/animals/dog_2.jpg",
-  "stimuli/animals/cat_1.jpg",
-  "stimuli/animals/cat_2.jpg",
+  "stimuli/food/pizza_1.jpg",
+  "stimuli/food/pizza_2.jpg",
+  "stimuli/food/french_fries_1.jpg",
+  "stimuli/food/french_fries_2.jpg",
   "stimuli/artifact/snowman_1.jpg",
-];
-
-const PRACTICE_IMAGES = [
-  "stimuli/food/rice.jpg",
-  "stimuli/food/pizza.jpg",
-  "stimuli/food/ice_cream.jpg",
-  "stimuli/food/chocolate.jpg",
-  "stimuli/food/ham.jpg",
-  "stimuli/food/hamburger.jpg",
-  "stimuli/food/cotton_candy.jpg",
-  "stimuli/food/french_fries.jpg",
-  "stimuli/food/pasta.jpg",
-  "stimuli/food/muffin.jpg",
-  "stimuli/food/bacon.jpg",
-  "stimuli/food/salad.jpg"
 ];
 
 const NUM_BLOCKS = 2;
@@ -761,7 +746,6 @@ randomizedCategoryOrder.forEach(category => {
 
 
 const allImagesToPreload = [
-  ...PRACTICE_IMAGES,
   ...MAIN_BLOCKS.flat(2)
 ];
 
@@ -874,14 +858,6 @@ const mini_practice_trial = {
   images: MINI_PRACTICE_IMAGES
 };
 
-const practice_trial = {
-  type: EmotionGridPlugin,
-  participant: DEMO_PARTICIPANT,
-  phase: "practice",
-  trial_number: 0,
-  total_trials: 1,
-  images: PRACTICE_IMAGES
-};
 
 const main_intro = {
   type: jsPsychHtmlButtonResponse,
@@ -950,6 +926,35 @@ const attention_star_page = {
   choices: ["Next"]
 };
 
+function makeCelebrationPage(message = "Great job!") {
+  return {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div style="
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding:80px 20px 40px 20px;
+        text-align:center;
+      ">
+        <img src="stimuli/fireworks.gif" style="
+          width:300px;
+          height:200px;
+          animation: spinScale 1.5s ease-in-out infinite;
+          margin-bottom:30px;
+        ">
+        <div style="font-size:28px; font-weight:600;">
+          ${message}
+        </div>
+      </div>
+
+
+    `,
+    choices: ["Next"]
+  };
+}
+
 
 const timeline = [
   participant_info_trial,
@@ -957,8 +962,7 @@ const timeline = [
   practice_intro,
   makePreviewPage(MINI_PRACTICE_IMAGES),
   mini_practice_trial,
-  makePreviewPage(PRACTICE_IMAGES),
-  practice_trial,
+  makeCelebrationPage(),
   main_intro
 ];
 
