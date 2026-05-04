@@ -8,6 +8,14 @@ const MINI_PRACTICE_IMAGES = [
   "stimuli/artifact/snowman_1.jpg",
 ];
 
+const MINI_PRACTICE_IMAGES_2 = [
+  "stimuli/food/ice_cream_1.jpg",
+  "stimuli/food/ice_cream_2.jpg",
+  "stimuli/food/chocolate_1.jpg",
+  "stimuli/food/chocolate_2.jpg",
+  "stimuli/cloud.jpg"
+];
+
 const NUM_BLOCKS = 2;
 const TRIALS_PER_BLOCK = 3;
 const TOTAL_MAIN_TRIALS = NUM_BLOCKS * TRIALS_PER_BLOCK;
@@ -368,24 +376,27 @@ class EmotionGridPlugin {
     }
 
     function getSnappedCellOrNull(x, y) {
-      const localX = x - GRID_X;
-      const localY = y - GRID_Y;
 
-      if (localX < 0 || localX > GRID_WIDTH ||
-          localY < 0 || localY > GRID_HEIGHT) {
+      if (x < 0 || x > GRID_WIDTH ||
+          y < 0 || y > GRID_HEIGHT) {
         return null;
       }
 
-      const col = Math.floor(localX / CELL_SIZE);
-      const row = Math.floor(localY / CELL_SIZE);
+      const col = Math.floor(x / CELL_SIZE);
+      const row = Math.floor(y / CELL_SIZE);
 
-      return getCellCenter(col, row);
+      return {
+        x: col * CELL_SIZE + CELL_SIZE / 2,
+        y: row * CELL_SIZE + CELL_SIZE / 2,
+        col,
+        row
+      };
     }
 
     function getCenterPosition() {
       return {
-        x: GRID_X + GRID_WIDTH / 2,
-        y: GRID_Y + GRID_HEIGHT / 2
+        x: GRID_WIDTH / 2,
+        y: GRID_HEIGHT / 2
       };
     }
 
@@ -438,11 +449,13 @@ class EmotionGridPlugin {
 
           <div id="warning" style="
             position:absolute;
-            top:20px;
-            width:100%;
+            top:${GRID_Y + GRID_HEIGHT + 20}px;
+            left:50%;
+            transform:translateX(-50%);
             text-align:center;
             color:#b00020;
             font-weight:600;
+            font-size:20px;
           "></div>
 
           <button id="continue-btn" style="
@@ -504,36 +517,41 @@ class EmotionGridPlugin {
         el.src = item.path;
         el.style.position = "absolute";
         el.style.left = `${item.stageX}px`;
-        el.style.top = `${item.stageY}px`;
+        el.style.top  = `${item.stageY}px`;
         el.style.transform = "translate(-50%, -50%)";
-        el.style.width = `${getDisplaySize(item)}px`;
-        el.style.height = `${getDisplaySize(item)}px`;
+        el.style.width = `${SMALL_SIZE}px`;
+        el.style.height = `${SMALL_SIZE}px`;
         el.style.touchAction = "none";
         el.style.cursor = "grab";
 
-        stage.appendChild(el);
+        grid.appendChild(el);
         imgEls.push(el);
+
+        if (!allImagesShown && index === currentFocusIdx) {
+          el.style.transform = "translate(-50%, -50%) scale(2)";
+        } else {
+          el.style.transform = "translate(-50%, -50%) scale(1)";
+        }
 
         el.addEventListener("pointerdown", (e) => {
 
           e.preventDefault();
 
-          const rect = stage.getBoundingClientRect();
+          const rect = grid.getBoundingClientRect();
           const x = e.clientX - rect.left;
           const y = e.clientY - rect.top;
 
           dragState = {
-            index,
-            offsetX: x - imageState[index].stageX,
-            offsetY: y - imageState[index].stageY,
+            index: index,
+            offsetX: x - item.stageX,
+            offsetY: y - item.stageY,
             pointerId: e.pointerId
           };
 
           highestZ++;
           el.style.zIndex = highestZ;
 
-          el.style.width = `${SMALL_SIZE * DRAG_SCALE}px`;
-          el.style.height = `${SMALL_SIZE * DRAG_SCALE}px`;
+          el.style.transform = "translate(-50%, -50%) scale(1.6)";
 
           el.setPointerCapture(e.pointerId);
         });
@@ -548,26 +566,27 @@ class EmotionGridPlugin {
 
         if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-        const rect = stage.getBoundingClientRect();
+        const rect = grid.getBoundingClientRect();   // 🔥 changed
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
         const index = dragState.index;
 
-        imageState[index].stageX =
-          clamp(x - dragState.offsetX,
-                GRID_X + SMALL_SIZE / 2,
-                GRID_X + GRID_WIDTH - SMALL_SIZE / 2);
+        const currentSize = SMALL_SIZE * DRAG_SCALE;
 
-        imageState[index].stageY =
-          clamp(y - dragState.offsetY,
-                GRID_Y + SMALL_SIZE / 2,
-                GRID_Y + GRID_HEIGHT - SMALL_SIZE / 2);
+        let newX = x - dragState.offsetX;
+        let newY = y - dragState.offsetY;
+
+        newX = clamp(newX, currentSize/2, GRID_WIDTH - currentSize/2);
+        newY = clamp(newY, currentSize/2, GRID_HEIGHT - currentSize/2);
+
+        imageState[index].stageX = newX;
+        imageState[index].stageY = newY;
 
         const el = imgEls[index];
         if (el) {
-          el.style.left = `${imageState[index].stageX}px`;
-          el.style.top = `${imageState[index].stageY}px`;
+          el.style.left = `${newX}px`;
+          el.style.top = `${newY}px`;
         }
       });
 
@@ -627,8 +646,7 @@ class EmotionGridPlugin {
         // Restore normal size
         const el = imgEls[index];
         if (el) {
-          el.style.width = `${SMALL_SIZE}px`;
-          el.style.height = `${SMALL_SIZE}px`;
+          el.style.transform = "translate(-50%, -50%) scale(1)";
         }
 
         render(); 
@@ -648,8 +666,8 @@ class EmotionGridPlugin {
 
     imageState[0].introduced = true;
     const center = getCenterPosition();
-    imageState[0].stageX = center.x;
-    imageState[0].stageY = center.y;
+    imageState[0].stageX = GRID_WIDTH / 2;
+    imageState[0].stageY = GRID_HEIGHT / 2;
 
     render();
   }
@@ -828,6 +846,15 @@ const mini_practice_trial = {
   trial_number: -1,  // distinguish from real practice
   total_trials: 1,
   images: MINI_PRACTICE_IMAGES
+};
+
+const mini_practice_trial_2 = {
+  type: EmotionGridPlugin,
+  participant: DEMO_PARTICIPANT,
+  phase: "practice",
+  trial_number: -2,  // just to distinguish it
+  total_trials: 1,
+  images: MINI_PRACTICE_IMAGES_2
 };
 
 
@@ -1034,7 +1061,11 @@ const timeline = [
   practice_intro,
   makePreviewPage(MINI_PRACTICE_IMAGES),
   mini_practice_trial,
-  makeCelebrationPage(),
+  makeCelebrationPage("Great job! Let's try one more!"),
+  makePreviewPage(MINI_PRACTICE_IMAGES_2),
+  mini_practice_trial_2,
+  makeCelebrationPage("Awesome! Now you're ready!"),
+
   main_intro
 ];
 
@@ -1071,6 +1102,8 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
       images: shuffledImages,
       image_order: shuffledImages
     });
+
+    timeline.push(attention_star_page);
 
     globalTrialNumber++;
   }
