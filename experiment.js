@@ -745,10 +745,21 @@ randomizedCategoryOrder.forEach(category => {
 });
 
 
-const allImagesToPreload = [
-  ...MAIN_BLOCKS.flat(2)
+const BALLOON_IMAGES = [
+  "stimuli/balloons/balloon_red.png",
+  "stimuli/balloons/balloon_blue.png",
+  "stimuli/balloons/balloon_green.png",
+  "stimuli/balloons/balloon_yellow.png",
+  "stimuli/balloons/balloon_purple.png",
+  "stimuli/balloons/balloon_pink.png",
+  "stimuli/balloons/balloon_violet.png",
+  "stimuli/balloons/balloon_orange.png"
 ];
 
+const allImagesToPreload = [
+  ...MAIN_BLOCKS.flat(2),
+  ...BALLOON_IMAGES
+];
 const participant_info_trial = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
@@ -955,6 +966,97 @@ function makeCelebrationPage(message = "Great job!") {
   };
 }
 
+function balloonMiniGame(numBalloons = 30) {
+  return {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div id="balloon-container" style="
+        position:relative;
+        width:100vw;
+        height:85vh;
+        overflow:hidden;
+        background: linear-gradient(#87CEEB, #E0F7FF);
+      "></div>
+
+      <style>
+        .balloon {
+          position:absolute;
+          width:80px;
+          height:100px;
+          cursor:pointer;
+          transition: transform 0.15s ease;
+          user-select:none;
+          touch-action: manipulation;
+        }
+
+        .balloon:active {
+          transform: scale(1.1);
+        }
+
+        .pop {
+          animation: popAnim 0.3s forwards;
+        }
+
+        @keyframes popAnim {
+          0%   { transform: scale(1); opacity:1; }
+          100% { transform: scale(2); opacity:0; }
+        }
+      </style>
+    `,
+    choices: [],
+    on_load: function() {
+
+      const container = document.getElementById("balloon-container");
+
+      const balloonImages = [
+        "stimuli/balloons/balloon_red.png",
+        "stimuli/balloons/balloon_blue.png",
+        "stimuli/balloons/balloon_green.png",
+        "stimuli/balloons/balloon_yellow.png",
+        "stimuli/balloons/balloon_purple.png",
+        "stimuli/balloons/balloon_pink.png",
+        "stimuli/balloons/balloon_violet.png",
+        "stimuli/balloons/balloon_orange.png",
+      ];
+
+      let popped = 0;
+
+      for (let i = 0; i < numBalloons; i++) {
+
+        const balloon = document.createElement("img");
+
+        // Random color
+        balloon.src = balloonImages[
+          Math.floor(Math.random() * balloonImages.length)
+        ];
+
+        balloon.className = "balloon";
+
+        // Random position (with margins to avoid clipping)
+        balloon.style.left = Math.random() * 85 + "vw";
+        balloon.style.top = Math.random() * 65 + "vh";
+
+        balloon.addEventListener("pointerdown", function() {
+
+          balloon.classList.add("pop");
+
+          setTimeout(() => balloon.remove(), 250);
+
+          popped++;
+
+          if (popped === numBalloons) {
+            setTimeout(() => {
+              jsPsychInstance.finishTrial();
+            }, 400);
+          }
+        });
+
+        container.appendChild(balloon);
+      }
+    }
+  };
+}
+
 
 const timeline = [
   participant_info_trial,
@@ -984,10 +1086,10 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
 
     const shuffledImages =
       jsPsychInstance.randomization.shuffle([...MAIN_BLOCKS[b][t]]);
-    
-      timeline.push(makePreviewPage(shuffledImages));
 
-      timeline.push({
+    timeline.push(makePreviewPage(shuffledImages));
+
+    timeline.push({
       type: EmotionGridPlugin,
       participant: DEMO_PARTICIPANT,
       phase: "main",
@@ -1001,8 +1103,12 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
     });
 
     globalTrialNumber++;
+  }
 
-    timeline.push(attention_star_page);
+  // 🔥 Only after finishing all 3 trials of Block 1
+  if (b === 0) {
+    timeline.push(balloonMiniGame(30));
+    timeline.push(makeCelebrationPage());
   }
 }
 
