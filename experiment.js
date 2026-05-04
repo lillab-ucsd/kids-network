@@ -276,7 +276,7 @@ function makeCSVContent(rows) {
   return [
     headers.join(","),
     ...rows.map(row =>
-      headers.map(h => `"${String(row[h] ?? "").replace(/"/g, '""')}"`).join(",")
+      headers.map(h => `"${String(row[h] !== undefined ? row[h] : "").replace(/"/g, '""')}"`)
     )
   ].join("\n");
 }
@@ -303,288 +303,197 @@ class EmotionGridPlugin {
   }
 
   trial(display_element, trial) {
-  const participant = trial.participant;
-  const phase = trial.phase;
-  const trialNumber = trial.trial_number;
-  const trialImages = trial.images;
-  const blockNumber = trial.block_number ?? null;
-  const trialNumberInBlock = trial.trial_number_in_block ?? trialNumber;
-  const totalTrialsInBlock = trial.total_trials_in_block ?? trial.total_trials;
 
-  const trialLabel =
-    phase === "practice"
-      ? "Practice Trial"
-      : `Block ${blockNumber}, Trial ${trialNumberInBlock} of ${totalTrialsInBlock}`;
+    let highestZ = 10;
+    const jsPsych = this.jsPsych;
+    const participant = trial.participant;
+    const phase = trial.phase;
+    const trialNumber = trial.trial_number;
+    const blockNumber = trial.block_number || null;
 
-  const imageState = trialImages.map((imgPath, i) => ({
-    path: imgPath,
-    stageX: 0,
-    stageY: 0,
-    index: i,
-    introduced: false,
-    hasBeenMoved: false
-  }));
+    const trialImages = trial.images || [];
+    if (!trialImages.length) {
+      console.error("No images passed to trial.");
+      return;
+    }
 
-  let dragState = null;
-  let warningMessage = "";
-  let currentFocusIdx = 0;
-  let allImagesShown = false;
+    /* ---------- State ---------- */
 
-  const moveLog = [];
+    const imageState = trialImages.map((path, i) => ({
+      path,
+      index: i,
+      stageX: 0,
+      stageY: 0,
+      introduced: false,
+      hasBeenMoved: false
+    }));
 
-function logMove(eventType, index, extra = {}) {
-  const item = imageState[index];
-  const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
+    let dragState = null;
+    let currentFocusIdx = 0;
+    let allImagesShown = false;
+    let warningMessage = "";
 
-  moveLog.push({
-    image_name: getFileName(imageState[index].path),
-    trial: trialNumber,
-    block: blockNumber,
-    phase,
-    grid_col: snapped.col + 1,
-    grid_row: snapped.row + 1,
-    posX: Math.round(snapped.x),
-    posY: Math.round(snapped.y),
-    timestamp: performance.now()
-  });
-}
-  const scale = getTaskScale();
-  const jsPsych = this.jsPsych;
+    const moveLog = [];
 
-    imageState[0].introduced = true;
-    const firstPos = getSingleStartPosition();
-    imageState[0].stageX = firstPos.x;
-    imageState[0].stageY = firstPos.y;
+    /* ---------- Layout ---------- */
+
+    const BASE_WIDTH = 1160;
+    const BASE_HEIGHT = 760;
+
+    const GRID_COLS = 10;
+    const GRID_ROWS = 6;
+    const CELL_SIZE = 104;
+
+    const GRID_WIDTH = GRID_COLS * CELL_SIZE;
+    const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
+
+    const GRID_X = (BASE_WIDTH - GRID_WIDTH) / 2;
+    const GRID_Y = 80;
+
+    const SMALL_SIZE = 90;
+    const FOCAL_SCALE = 2;
+    const DRAG_SCALE = 1.6;
+
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    function getCellCenter(col, row) {
+      return {
+        x: GRID_X + col * CELL_SIZE + CELL_SIZE / 2,
+        y: GRID_Y + row * CELL_SIZE + CELL_SIZE / 2,
+        col,
+        row
+      };
+    }
+
+    function getSnappedCellOrNull(x, y) {
+      const localX = x - GRID_X;
+      const localY = y - GRID_Y;
+
+      if (localX < 0 || localX > GRID_WIDTH ||
+          localY < 0 || localY > GRID_HEIGHT) {
+        return null;
+      }
+
+      const col = Math.floor(localX / CELL_SIZE);
+      const row = Math.floor(localY / CELL_SIZE);
+
+      return getCellCenter(col, row);
+    }
+
+    function getCenterPosition() {
+      return {
+        x: GRID_X + GRID_WIDTH / 2,
+        y: GRID_Y + GRID_HEIGHT / 2
+      };
+    }
+
+    function getDisplaySize(item) {
+      if (dragState && dragState.index === item.index)
+        return SMALL_SIZE * DRAG_SCALE;
+
+      if (!allImagesShown && item.index === currentFocusIdx)
+        return SMALL_SIZE * FOCAL_SCALE;
+
+      return SMALL_SIZE;
+    }
+
+    function logPlacement(index) {
+      const item = imageState[index];
+      const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
+      if (!snapped) return;
+
+      moveLog.push({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        image: item.path.split("/").pop(),
+        grid_col: snapped.col + 1,
+        grid_row: snapped.row + 1,
+        timestamp: performance.now()
+      });
+    }
+
+    /* ---------- Build HTML ---------- */
 
     display_element.innerHTML = `
-      <div style="
-        width: 100vw;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f5f5f5;
-        overflow: hidden;
-      ">
-        <div id="task-stage" style="
-          width: ${BASE_TASK_WIDTH}px;
-          height: ${BASE_TASK_HEIGHT}px;
-          position: relative;
-          transform: scale(${scale});
-          transform-origin: center center;
-          background: #f5f5f5;
+      <div style="display:flex;justify-content:center;">
+        <div id="stage" style="
+          width:${BASE_WIDTH}px;
+          height:${BASE_HEIGHT}px;
+          position:relative;
+          background:#f5f5f5;
         ">
-          <div style="
-            position: absolute;
-            top: ${TOPBAR_Y}px;
-            left: 0;
-            width: ${BASE_TASK_WIDTH}px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            z-index: 5;
+          <div id="grid" style="
+            position:absolute;
+            left:${GRID_X}px;
+            top:${GRID_Y}px;
+            width:${GRID_WIDTH}px;
+            height:${GRID_HEIGHT}px;
+            border:3px solid #444;
+            background:white;
+          "></div>
+
+          <div id="warning" style="
+            position:absolute;
+            top:20px;
+            width:100%;
+            text-align:center;
+            color:#b00020;
+            font-weight:600;
+          "></div>
+
+          <button id="continue-btn" style="
+            position:absolute;
+            top:${GRID_Y - 60}px;
+            left:50%;
+            transform:translateX(-50%);
+            padding:12px 28px;
+            font-size:18px;
+            display:none;
           ">
-            <div style="
-              font-size: 18px;
-              font-weight: 700;
-              line-height: 1;
-            ">
-              ${trialLabel}
-            </div>
-
-            <button id="continue-btn" style="
-              width: 140px;
-              height: 42px;
-              font-size: 18px;
-              border-radius: 12px;
-              border: 1px solid #888;
-              background: white;
-              cursor: pointer;
-              display: none;
-            ">
-              Continue
-            </button>
-          </div>
-
-          <div id="grid-container" style="
-            position: absolute;
-            left: ${GRID_X}px;
-            top: ${GRID_Y}px;
-            width: ${GRID_WIDTH}px;
-            height: ${CONTAINER_HEIGHT}px;
-            border: 3px solid #444;
-            background: white;
-            overflow: hidden;
-            touch-action: none;
-            z-index: 1;
-          "></div>
-
-          <div id="warning-text" style="
-            position: absolute;
-            left: 0;
-            top: ${WARNING_Y}px;
-            width: ${BASE_TASK_WIDTH}px;
-            min-height: 26px;
-            text-align: center;
-            font-size: 16px;
-            line-height: 1.2;
-            color: #b00020;
-            font-weight: 500;
-            z-index: 4;
-          "></div>
+            Continue
+          </button>
         </div>
       </div>
     `;
 
-    const stage = display_element.querySelector("#task-stage");
-    const container = display_element.querySelector("#grid-container");
-    const warningEl = display_element.querySelector("#warning-text");
+    const stage = display_element.querySelector("#stage");
+    const grid = display_element.querySelector("#grid");
+    const warningEl = display_element.querySelector("#warning");
     const continueBtn = display_element.querySelector("#continue-btn");
-    container.style.touchAction = "none";
+
+    /* ---------- Draw Grid Lines ---------- */
 
     for (let c = 1; c < GRID_COLS; c++) {
       const line = document.createElement("div");
-      line.className = "grid-line-v";
-      line.style.left = `${c * CELL_SIZE - 1}px`;
-      line.style.top = `0px`;
-      line.style.width = `2px`;
+      line.style.position = "absolute";
+      line.style.left = `${c * CELL_SIZE}px`;
+      line.style.top = "0";
+      line.style.width = "1px";
       line.style.height = `${GRID_HEIGHT}px`;
-      container.appendChild(line);
+      line.style.background = "#ccc";
+      grid.appendChild(line);
     }
 
     for (let r = 1; r < GRID_ROWS; r++) {
       const line = document.createElement("div");
-      line.className = "grid-line-h";
-      line.style.top = `${r * CELL_SIZE - 1}px`;
-      line.style.left = `0px`;
-      line.style.height = `2px`;
+      line.style.position = "absolute";
+      line.style.top = `${r * CELL_SIZE}px`;
+      line.style.left = "0";
+      line.style.height = "1px";
       line.style.width = `${GRID_WIDTH}px`;
-      container.appendChild(line);
+      line.style.background = "#ccc";
+      grid.appendChild(line);
     }
+
+    /* ---------- Rendering ---------- */
 
     const imgEls = [];
 
-    function getStagePointFromClient(clientX, clientY) {
-      const rect = stage.getBoundingClientRect();
-      const currentScale = getTaskScale();
-      return {
-        x: (clientX - rect.left) / currentScale,
-        y: (clientY - rect.top) / currentScale
-      };
-    }
-
-    function getSnappedCellOrNull(stageX, stageY) {
-      return nearestCellFromStagePoint(stageX, stageY);
-    }
-
-    function getCurrentFocusPath() {
-      return imageState[currentFocusIdx]?.path;
-    }
-
-    function getDisplaySize(item) {
-      const isDragging = dragState && dragState.index === item.index;
-      const isFocal = !allImagesShown && item.path === getCurrentFocusPath();
-
-      if (isDragging) return Math.round(SMALL_SIZE * DRAG_SCALE);
-      if (isFocal) return Math.round(SMALL_SIZE * FOCAL_SCALE);
-      return SMALL_SIZE;
-    }
-
-    function allIntroducedPlacedInUniqueSquares() {
-      const occupied = [];
-
-      for (const item of imageState) {
-        if (!item.introduced) continue;
-        const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
-        if (!snapped) return false;
-        occupied.push(`${snapped.col},${snapped.row}`);
-      }
-
-      return new Set(occupied).size === occupied.length;
-    }
-
-    function finishWholeTrial() {
-      const placements = imageState
-        .filter(item => item.introduced)
-        .map(item => {
-          const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
-          return {
-            participant,
-            phase,
-            block: blockNumber,
-            trial: trialNumber,
-            trial_in_block: trialNumberInBlock,
-            image: getFileName(item.path),
-            final_img_pos: `(${Math.round(item.stageX)}, ${Math.round(item.stageY)})`,
-            posX: Math.round(item.stageX),
-            posY: Math.round(item.stageY),
-            grid_col: snapped.col + 1,
-            grid_row: snapped.row + 1,
-            introduction_order: item.index + 1
-          };
-        });
-
-
-      display_element.innerHTML = "";
-
-      jsPsych.finishTrial({
-        participant,
-        phase,
-        image_order: trial.image_order,
-        block: blockNumber,
-        trial: trialNumber,
-        trial_in_block: trialNumberInBlock,
-        placements,
-        move_log: moveLog
-      });
-    }
-
-    function introduceNextImage() {
-      if (currentFocusIdx >= imageState.length - 1) return false;
-
-      currentFocusIdx += 1;
-      imageState[currentFocusIdx].introduced = true;
-
-      const pos = getSingleStartPosition();
-      imageState[currentFocusIdx].stageX = pos.x;
-      imageState[currentFocusIdx].stageY = pos.y;
-
-      return true;
-    }
-
-    function maybeAdvanceAfterPlacement(index) {
-      if (index !== currentFocusIdx) return;
-
-      if (!imageState[index].hasBeenMoved) return;
-
-      const currentItem = imageState[currentFocusIdx];
-      const snapped = getSnappedCellOrNull(currentItem.stageX, currentItem.stageY);
-      if (!snapped) return;
-
-      currentItem.stageX = snapped.x;
-      currentItem.stageY = snapped.y;
-
-      if (!allIntroducedPlacedInUniqueSquares()) return;
-
-      const hasNext = introduceNextImage();
-      if (hasNext) {
-        warningMessage = "";
-        renderImages();
-      } else {
-        allImagesShown = true;
-        warningMessage = "You can still adjust the pictures. Tap Continue when you are finished.";
-        continueBtn.style.display = "inline-block";
-
-        // make sure the last image is fully snapped and no longer treated as focal
-        currentItem.stageX = snapped.x;
-        currentItem.stageY = snapped.y;
-
-        renderImages();
-      }
-    }
-
-    function renderImages() {
+    function render() {
       imgEls.forEach(el => el.remove());
       imgEls.length = 0;
 
@@ -592,105 +501,157 @@ function logMove(eventType, index, extra = {}) {
         if (!item.introduced) return;
 
         const el = document.createElement("img");
-        el.className = "stim-img";
         el.src = item.path;
-        el.draggable = false;
+        el.style.position = "absolute";
+        el.style.left = `${item.stageX}px`;
+        el.style.top = `${item.stageY}px`;
+        el.style.transform = "translate(-50%, -50%)";
+        el.style.width = `${getDisplaySize(item)}px`;
+        el.style.height = `${getDisplaySize(item)}px`;
+        el.style.touchAction = "none";
+        el.style.cursor = "grab";
 
-        const size = getDisplaySize(item);
-        el.style.width = `${size}px`;
-        el.style.height = `${size}px`;
-        el.style.left = `${item.stageX - GRID_X}px`;
-        el.style.top = `${item.stageY - GRID_Y}px`;
-
-        container.appendChild(el);
+        stage.appendChild(el);
         imgEls.push(el);
-        attachDragHandlers(el, index);
+
+        el.addEventListener("pointerdown", (e) => {
+
+          e.preventDefault();
+
+          const rect = stage.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          dragState = {
+            index,
+            offsetX: x - imageState[index].stageX,
+            offsetY: y - imageState[index].stageY,
+            pointerId: e.pointerId
+          };
+
+          highestZ++;
+          el.style.zIndex = highestZ;
+
+          el.style.width = `${SMALL_SIZE * DRAG_SCALE}px`;
+          el.style.height = `${SMALL_SIZE * DRAG_SCALE}px`;
+
+          el.setPointerCapture(e.pointerId);
+        });
       });
 
       warningEl.textContent = warningMessage;
     }
 
-    function attachDragHandlers(el, index) {
+    /* ---------- Dragging ---------- */
 
-      el.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
+    stage.addEventListener("pointermove", (e) => {
 
-        const p = getStagePointFromClient(e.clientX, e.clientY);
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-        dragState = {
-          index,
-          offsetX: p.x - imageState[index].stageX,
-          offsetY: p.y - imageState[index].stageY
-        };
+        const rect = stage.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
-        if (el.setPointerCapture) {
-          el.setPointerCapture(e.pointerId);
+        const index = dragState.index;
+
+        imageState[index].stageX =
+          clamp(x - dragState.offsetX,
+                GRID_X + SMALL_SIZE / 2,
+                GRID_X + GRID_WIDTH - SMALL_SIZE / 2);
+
+        imageState[index].stageY =
+          clamp(y - dragState.offsetY,
+                GRID_Y + SMALL_SIZE / 2,
+                GRID_Y + GRID_HEIGHT - SMALL_SIZE / 2);
+
+        const el = imgEls[index];
+        if (el) {
+          el.style.left = `${imageState[index].stageX}px`;
+          el.style.top = `${imageState[index].stageY}px`;
         }
       });
 
-    }
-
-    stage.addEventListener("pointermove", (e) => {
-      if (!dragState) return;
-
-      const index = dragState.index;
-      const p = getStagePointFromClient(e.clientX, e.clientY);
-
-      let stageX = p.x - dragState.offsetX;
-      let stageY = p.y - dragState.offsetY;
-
-      const currentSize = SMALL_SIZE;
-
-      stageX = clamp(stageX, GRID_X + currentSize / 2, GRID_X + GRID_WIDTH - currentSize / 2);
-      stageY = clamp(stageY, GRID_Y + currentSize / 2, GRID_Y + CONTAINER_HEIGHT - currentSize / 2);
-
-      imageState[index].stageX = stageX;
-      imageState[index].stageY = stageY;
-
-      renderImages();
-    });
-
     stage.addEventListener("pointerup", (e) => {
-      if (!dragState) return;
 
-      const index = dragState.index;
-      dragState = null;
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-      const snapped = getSnappedCellOrNull(
-        imageState[index].stageX,
-        imageState[index].stageY
-      );
+        const index = dragState.index;
+        dragState = null;
 
-      if (!snapped) {
-        renderImages();
-        return;
-      }
+        const item = imageState[index];
+        const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
 
-      imageState[index].stageX = snapped.x;
-      imageState[index].stageY = snapped.y;
+        if (!snapped) {
+          render();
+          return;
+        }
 
-      logMove("placement", index);
+        const conflict = imageState.some((other, i) => {
+          if (i === index || !other.introduced) return false;
+          const otherSnap = getSnappedCellOrNull(other.stageX, other.stageY);
+          return otherSnap &&
+                otherSnap.col === snapped.col &&
+                otherSnap.row === snapped.row;
+        });
 
-      imageState[index].hasBeenMoved = true;
+        if (conflict) {
+          warningMessage = "Only one picture per square!";
+          render();
+          return;
+        }
 
-      maybeAdvanceAfterPlacement(index);   // 🔥 restore this
+        item.stageX = snapped.x;
+        item.stageY = snapped.y;
+        item.hasBeenMoved = true;
+        warningMessage = "";
 
-      renderImages();
-    });
+        logPlacement(index);
+
+        if (!allImagesShown &&
+            index === currentFocusIdx &&
+            item.hasBeenMoved) {
+
+          if (currentFocusIdx < imageState.length - 1) {
+            currentFocusIdx++;
+            imageState[currentFocusIdx].introduced = true;
+
+            const center = getCenterPosition();
+            imageState[currentFocusIdx].stageX = center.x;
+            imageState[currentFocusIdx].stageY = center.y;
+          } else {
+            allImagesShown = true;
+            continueBtn.style.display = "inline-block";
+          }
+        }
+
+        // Restore normal size
+        const el = imgEls[index];
+        if (el) {
+          el.style.width = `${SMALL_SIZE}px`;
+          el.style.height = `${SMALL_SIZE}px`;
+        }
+
+        render(); 
+      });
 
     continueBtn.addEventListener("click", () => {
-      if (!allImagesShown) return;
-
-      if (!allIntroducedPlacedInUniqueSquares()) {
-        warningMessage = "Make sure all pictures are in different grid squares before continuing.";
-        renderImages();
-        return;
-      }
-
-      finishWholeTrial();
+      jsPsych.finishTrial({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        move_log: moveLog
+      });
     });
 
-    renderImages();
+    /* ---------- Start ---------- */
+
+    imageState[0].introduced = true;
+    const center = getCenterPosition();
+    imageState[0].stageX = center.x;
+    imageState[0].stageY = center.y;
+
+    render();
   }
 }
 
@@ -966,14 +927,14 @@ function makeCelebrationPage(message = "Great job!") {
   };
 }
 
-function balloonMiniGame(numBalloons = 30) {
+function balloonMiniGame(totalBalloons = 10) {
   return {
     type: jsPsychHtmlButtonResponse,
     stimulus: `
-      <div id="balloon-container" style="
+      <div id="balloon-stage" style="
         position:relative;
         width:100vw;
-        height:85vh;
+        height:100vh;
         overflow:hidden;
         background: linear-gradient(#87CEEB, #E0F7FF);
       "></div>
@@ -981,12 +942,12 @@ function balloonMiniGame(numBalloons = 30) {
       <style>
         .balloon {
           position:absolute;
-          width:80px;
-          height:100px;
+          width:120px;
+          height:150px;
           cursor:pointer;
-          transition: transform 0.15s ease;
           user-select:none;
           touch-action: manipulation;
+          transition: transform 0.15s ease;
         }
 
         .balloon:active {
@@ -994,19 +955,19 @@ function balloonMiniGame(numBalloons = 30) {
         }
 
         .pop {
-          animation: popAnim 0.3s forwards;
+          animation: popAnim 0.35s forwards;
         }
 
         @keyframes popAnim {
           0%   { transform: scale(1); opacity:1; }
-          100% { transform: scale(2); opacity:0; }
+          100% { transform: scale(1.8); opacity:0; }
         }
       </style>
     `,
     choices: [],
     on_load: function() {
 
-      const container = document.getElementById("balloon-container");
+      const stage = document.getElementById("balloon-stage");
 
       const balloonImages = [
         "stimuli/balloons/balloon_red.png",
@@ -1016,43 +977,52 @@ function balloonMiniGame(numBalloons = 30) {
         "stimuli/balloons/balloon_purple.png",
         "stimuli/balloons/balloon_pink.png",
         "stimuli/balloons/balloon_violet.png",
-        "stimuli/balloons/balloon_orange.png",
+        "stimuli/balloons/balloon_orange.png"
       ];
 
-      let popped = 0;
+      let poppedCount = 0;
 
-      for (let i = 0; i < numBalloons; i++) {
+      function showBalloon() {
+
+        if (poppedCount >= totalBalloons) {
+          setTimeout(() => {
+            jsPsychInstance.finishTrial();
+          }, 400);
+          return;
+        }
 
         const balloon = document.createElement("img");
-
-        // Random color
-        balloon.src = balloonImages[
-          Math.floor(Math.random() * balloonImages.length)
-        ];
-
         balloon.className = "balloon";
 
-        // Random position (with margins to avoid clipping)
-        balloon.style.left = Math.random() * 85 + "vw";
-        balloon.style.top = Math.random() * 65 + "vh";
+        // random color
+        balloon.src =
+          balloonImages[Math.floor(Math.random() * balloonImages.length)];
+
+        // random position (avoid edges)
+        const maxX = window.innerWidth - 140;
+        const maxY = window.innerHeight - 200;
+
+        const randomX = Math.random() * maxX;
+        const randomY = Math.random() * maxY;
+
+        balloon.style.left = randomX + "px";
+        balloon.style.top = randomY + "px";
 
         balloon.addEventListener("pointerdown", function() {
 
           balloon.classList.add("pop");
 
-          setTimeout(() => balloon.remove(), 250);
-
-          popped++;
-
-          if (popped === numBalloons) {
-            setTimeout(() => {
-              jsPsychInstance.finishTrial();
-            }, 400);
-          }
+          setTimeout(() => {
+            balloon.remove();
+            poppedCount++;
+            showBalloon();
+          }, 300);
         });
 
-        container.appendChild(balloon);
+        stage.appendChild(balloon);
       }
+
+      showBalloon();
     }
   };
 }
@@ -1091,7 +1061,7 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
 
     timeline.push({
       type: EmotionGridPlugin,
-      participant: DEMO_PARTICIPANT,
+      participant: window.PARTICIPANT_ID,
       phase: "main",
       block_number: b + 1,
       trial_number: globalTrialNumber,
@@ -1105,11 +1075,11 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
     globalTrialNumber++;
   }
 
-  // 🔥 Only after finishing all 3 trials of Block 1
   if (b === 0) {
-    timeline.push(balloonMiniGame(30));
+    timeline.push(balloonMiniGame(10));
     timeline.push(makeCelebrationPage());
   }
+
 }
 
 
