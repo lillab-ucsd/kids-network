@@ -223,10 +223,11 @@ function makePreviewPage(images) {
       ">
         <div style="
           display:grid;
-          grid-template-columns: repeat(6, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+          justify-content: center;
           gap:24px;
           max-width:1000px;
-          margin-bottom:40px;
+          margin:0 auto 40px auto;
         ">
           ${images.map(img => `
             <img src="${img}" style="
@@ -375,15 +376,18 @@ class EmotionGridPlugin {
       };
     }
 
-    function getSnappedCellOrNull(x, y) {
+    function getSnappedCellOrNull(stageX, stageY) {
 
-      if (x < 0 || x > GRID_WIDTH ||
-          y < 0 || y > GRID_HEIGHT) {
+  // If center is outside grid, don't snap
+      if (
+        stageX < 0 || stageX > GRID_WIDTH ||
+        stageY < 0 || stageY > GRID_HEIGHT
+      ) {
         return null;
       }
 
-      const col = Math.floor(x / CELL_SIZE);
-      const row = Math.floor(y / CELL_SIZE);
+      const col = Math.floor(stageX / CELL_SIZE);
+      const row = Math.floor(stageY / CELL_SIZE);
 
       return {
         x: col * CELL_SIZE + CELL_SIZE / 2,
@@ -524,6 +528,7 @@ class EmotionGridPlugin {
         el.style.touchAction = "none";
         el.style.cursor = "grab";
 
+        el.style.zIndex = item.zIndex || 1;
         grid.appendChild(el);
         imgEls.push(el);
 
@@ -549,6 +554,7 @@ class EmotionGridPlugin {
           };
 
           highestZ++;
+          item.zIndex = highestZ;
           el.style.zIndex = highestZ;
 
           el.style.transform = "translate(-50%, -50%) scale(1.6)";
@@ -592,65 +598,71 @@ class EmotionGridPlugin {
 
     stage.addEventListener("pointerup", (e) => {
 
-        if (!dragState || e.pointerId !== dragState.pointerId) return;
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-        const index = dragState.index;
-        dragState = null;
+      const index = dragState.index;
+      dragState = null;
 
-        const item = imageState[index];
-        const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
+      const item = imageState[index];
+      const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
 
-        if (!snapped) {
-          render();
-          return;
-        }
+      if (!snapped) {
+        render();
+        return;
+      }
 
-        const conflict = imageState.some((other, i) => {
-          if (i === index || !other.introduced) return false;
-          const otherSnap = getSnappedCellOrNull(other.stageX, other.stageY);
-          return otherSnap &&
-                otherSnap.col === snapped.col &&
-                otherSnap.row === snapped.row;
-        });
-
-        if (conflict) {
-          warningMessage = "Only one picture per square!";
-          render();
-          return;
-        }
-
-        item.stageX = snapped.x;
-        item.stageY = snapped.y;
-        item.hasBeenMoved = true;
-        warningMessage = "";
-
-        logPlacement(index);
-
-        if (!allImagesShown &&
-            index === currentFocusIdx &&
-            item.hasBeenMoved) {
-
-          if (currentFocusIdx < imageState.length - 1) {
-            currentFocusIdx++;
-            imageState[currentFocusIdx].introduced = true;
-
-            const center = getCenterPosition();
-            imageState[currentFocusIdx].stageX = center.x;
-            imageState[currentFocusIdx].stageY = center.y;
-          } else {
-            allImagesShown = true;
-            continueBtn.style.display = "inline-block";
-          }
-        }
-
-        // Restore normal size
-        const el = imgEls[index];
-        if (el) {
-          el.style.transform = "translate(-50%, -50%) scale(1)";
-        }
-
-        render(); 
+      const conflict = imageState.some((other, i) => {
+        if (i === index || !other.introduced) return false;
+        const otherSnap = getSnappedCellOrNull(other.stageX, other.stageY);
+        return otherSnap &&
+              otherSnap.col === snapped.col &&
+              otherSnap.row === snapped.row;
       });
+
+      if (conflict) {
+        warningMessage = "Only one picture per square!";
+        warningEl.textContent = warningMessage;
+        render();
+        return;
+      }
+
+      item.stageX = snapped.x;
+      item.stageY = snapped.y;
+      item.hasBeenMoved = true;
+      warningMessage = "";
+      warningEl.textContent = "";
+
+      logPlacement(index);
+
+      if (!allImagesShown &&
+          index === currentFocusIdx &&
+          item.hasBeenMoved) {
+
+        if (currentFocusIdx < imageState.length - 1) {
+          currentFocusIdx++;
+          imageState[currentFocusIdx].introduced = true;
+
+          const center = getCenterPosition();
+          imageState[currentFocusIdx].stageX = center.x;
+          imageState[currentFocusIdx].stageY = center.y;
+
+          highestZ++;
+          imageState[currentFocusIdx].zIndex = highestZ;
+
+          render();
+        } else {
+          allImagesShown = true;
+          continueBtn.style.display = "inline-block";
+        }
+      }
+
+      const el = imgEls[index];
+      if (el) {
+        el.style.transform = "translate(-50%, -50%) scale(1)";
+      }
+
+      render();
+    });
 
     continueBtn.addEventListener("click", () => {
       jsPsych.finishTrial({
@@ -954,7 +966,7 @@ function makeCelebrationPage(message = "Great job!") {
   };
 }
 
-function balloonMiniGame(totalBalloons = 10) {
+function balloonMiniGame(totalBalloons = 15) {
   return {
     type: jsPsychHtmlButtonResponse,
     stimulus: `
@@ -969,7 +981,7 @@ function balloonMiniGame(totalBalloons = 10) {
       <style>
         .balloon {
           position:absolute;
-          width:120px;
+          width:150px;
           height:150px;
           cursor:pointer;
           user-select:none;
@@ -1011,29 +1023,44 @@ function balloonMiniGame(totalBalloons = 10) {
 
       function showBalloon() {
 
+        // END condition
         if (poppedCount >= totalBalloons) {
-          setTimeout(() => {
+
+          const doneButton = document.createElement("button");
+          doneButton.textContent = "Continue";
+
+          doneButton.style.position = "absolute";
+          doneButton.style.left = "50%";
+          doneButton.style.top = "50%";
+          doneButton.style.transform = "translate(-50%, -50%)";
+          doneButton.style.fontSize = "28px";
+          doneButton.style.padding = "20px 50px";
+          doneButton.style.borderRadius = "16px";
+          doneButton.style.background = "#4CAF50";
+          doneButton.style.color = "white";
+          doneButton.style.border = "none";
+          doneButton.style.cursor = "pointer";
+
+          doneButton.addEventListener("click", () => {
             jsPsychInstance.finishTrial();
-          }, 400);
+          });
+
+          stage.appendChild(doneButton);
           return;
         }
 
+        // CREATE BALLOON
         const balloon = document.createElement("img");
         balloon.className = "balloon";
 
-        // random color
         balloon.src =
           balloonImages[Math.floor(Math.random() * balloonImages.length)];
 
-        // random position (avoid edges)
         const maxX = window.innerWidth - 140;
         const maxY = window.innerHeight - 200;
 
-        const randomX = Math.random() * maxX;
-        const randomY = Math.random() * maxY;
-
-        balloon.style.left = randomX + "px";
-        balloon.style.top = randomY + "px";
+        balloon.style.left = Math.random() * maxX + "px";
+        balloon.style.top = Math.random() * maxY + "px";
 
         balloon.addEventListener("pointerdown", function() {
 
@@ -1042,13 +1069,14 @@ function balloonMiniGame(totalBalloons = 10) {
           setTimeout(() => {
             balloon.remove();
             poppedCount++;
-            showBalloon();
+            showBalloon();   //call next balloon
           }, 300);
         });
 
         stage.appendChild(balloon);
       }
 
+      //start first balloon
       showBalloon();
     }
   };
@@ -1109,7 +1137,7 @@ for (let b = 0; b < NUM_BLOCKS; b++) {
   }
 
   if (b === 0) {
-    timeline.push(balloonMiniGame(10));
+    timeline.push(balloonMiniGame(15));
     timeline.push(makeCelebrationPage());
   }
 
