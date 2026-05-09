@@ -16,9 +16,13 @@ const MINI_PRACTICE_IMAGES_2 = [
   "stimuli/cloud.jpg"
 ];
 
-const NUM_BLOCKS = 2;
-const TRIALS_PER_BLOCK = 3;
+const NUM_BLOCKS = 3;
+const TRIALS_PER_BLOCK = 2;
 const TOTAL_MAIN_TRIALS = NUM_BLOCKS * TRIALS_PER_BLOCK;
+
+let MAIN_BLOCKS = [];
+let randomizedCategoryOrder = [];
+let useReverseSetOrder = false;
 
 
 /* ---------- category structure ---------- */
@@ -697,45 +701,6 @@ const jsPsychInstance = initJsPsych({
   on_finish: function() {}
 });
 
-const categoryNames = Object.keys(CATEGORIES);
-const randomizedCategoryOrder =
-  jsPsychInstance.randomization.shuffle(categoryNames);
-
-/* ---------- counterbalance sets ---------- */
-
-const categorySetAssignment = {};
-
-randomizedCategoryOrder.forEach(category => {
-  const firstSetIndex = Math.random() < 0.5 ? 0 : 1;
-
-  categorySetAssignment[category] = {
-    block1: firstSetIndex,
-    block2: 1 - firstSetIndex
-  };
-});
-
-jsPsychInstance.data.addProperties({
-  category_order: randomizedCategoryOrder.join(","),
-  set_assignment: JSON.stringify(categorySetAssignment)
-});
-
-/* ---------- build MAIN_BLOCKS dynamically ---------- */
-
-const MAIN_BLOCKS = [[], []];
-
-randomizedCategoryOrder.forEach(category => {
-
-  MAIN_BLOCKS[0].push(
-    CATEGORIES[category][categorySetAssignment[category].block1]
-  );
-
-  MAIN_BLOCKS[1].push(
-    CATEGORIES[category][categorySetAssignment[category].block2]
-  );
-
-});
-
-
 const BALLOON_IMAGES = [
   "stimuli/balloons/balloon_red.png",
   "stimuli/balloons/balloon_blue.png",
@@ -747,10 +712,6 @@ const BALLOON_IMAGES = [
   "stimuli/balloons/balloon_orange.png"
 ];
 
-const allImagesToPreload = [
-  ...MAIN_BLOCKS.flat(2),
-  ...BALLOON_IMAGES
-];
 const participant_info_trial = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
@@ -766,11 +727,11 @@ const participant_info_trial = {
     </div>
 
     <div>
-      Version (1–8):<br>
+      Version (1–12):<br>
       <input id="version-input"
              type="number"
              min="1"
-             max="8"
+             max="12"
              style="font-size:22px; padding:8px; width:80px;">
     </div>
   `,
@@ -797,18 +758,102 @@ const participant_info_trial = {
         return;
       }
 
-      if (!version || version < 1 || version > 8) {
-        alert("Version must be between 1 and 8.");
+      if (!version || version < 1 || version > 12) {
+        alert("Version must be between 1 and 12.");
         return;
       }
 
       window.PARTICIPANT_ID = pid;
       window.VERSION = version;
 
+      /* ---------- BUILD COUNTERBALANCE AFTER VERSION ENTERED ---------- */
+
+      const CATEGORY_ORDERS = [
+        ["animals","emotions","plants"],
+        ["animals","plants","emotions"],
+        ["emotions","animals","plants"],
+        ["emotions","plants","animals"],
+        ["plants","animals","emotions"],
+        ["plants","emotions","animals"]
+      ];
+
+      randomizedCategoryOrder =
+        CATEGORY_ORDERS[(version - 1) % 6];
+
+      useReverseSetOrder = version > 6;
+
+      MAIN_BLOCKS = [];
+
+      randomizedCategoryOrder.forEach(category => {
+
+        const firstSetIndex = useReverseSetOrder ? 1 : 0;
+        const secondSetIndex = useReverseSetOrder ? 0 : 1;
+
+        const firstImages = CATEGORIES[category][firstSetIndex];
+        const secondImages = CATEGORIES[category][secondSetIndex];
+
+        const blockTrials = [
+          jsPsychInstance.randomization.shuffle([...firstImages]),
+          jsPsychInstance.randomization.shuffle([...secondImages])
+        ];
+
+        MAIN_BLOCKS.push(blockTrials);
+      });
+
+      /* ---------- BUILD MAIN TIMELINE NOW THAT MAIN_BLOCKS EXISTS ---------- */
+
+      let globalTrialNumber = 1;
+
+      for (let b = 0; b < NUM_BLOCKS; b++) {
+
+        timeline.push({
+          type: jsPsychHtmlButtonResponse,
+          stimulus: `
+            <div style="font-size:24px; padding:20px;">
+              Block ${b + 1} of ${NUM_BLOCKS}
+            </div>
+          `,
+          choices: ["Begin Block"]
+        });
+
+        for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
+
+          const shuffledImages =
+            jsPsychInstance.randomization.shuffle([...MAIN_BLOCKS[b][t]]);
+
+          timeline.push(makePreviewPage(shuffledImages));
+
+          timeline.push({
+            type: EmotionGridPlugin,
+            participant: pid,
+            phase: "main",
+            block_number: b + 1,
+            trial_number: globalTrialNumber,
+            trial_number_in_block: t + 1,
+            total_trials: TOTAL_MAIN_TRIALS,
+            total_trials_in_block: TRIALS_PER_BLOCK,
+            images: shuffledImages,
+            image_order: shuffledImages
+          });
+
+          timeline.push(attention_star_page);
+
+          globalTrialNumber++;
+        }
+
+        if (b < NUM_BLOCKS - 1) {
+          timeline.push(balloonMiniGame(10));
+          timeline.push(makeCelebrationPage("Great job! Ready for the next round?"));
+        }
+      }
+
       jsPsychInstance.data.addProperties({
         participant_id: pid,
         version: version
       });
+
+      timeline.push(save_data);
+      timeline.push(finish_page);
 
       jsPsychInstance.finishTrial();
     });
@@ -817,7 +862,12 @@ const participant_info_trial = {
 
 const preload_trial = {
   type: jsPsychPreload,
-  images: allImagesToPreload
+  images: [
+    ...Object.values(CATEGORIES).flat(2),
+    ...BALLOON_IMAGES,
+    ...MINI_PRACTICE_IMAGES,
+    ...MINI_PRACTICE_IMAGES_2
+  ]
 };
 
 const practice_intro = {
@@ -966,7 +1016,7 @@ function makeCelebrationPage(message = "Great job!") {
   };
 }
 
-function balloonMiniGame(totalBalloons = 15) {
+function balloonMiniGame(totalBalloons = 10) {
   return {
     type: jsPsychHtmlButtonResponse,
     stimulus: `
@@ -1097,53 +1147,6 @@ const timeline = [
   main_intro
 ];
 
-let globalTrialNumber = 1;
-
-for (let b = 0; b < NUM_BLOCKS; b++) {
-
-  timeline.push({
-    type: jsPsychHtmlButtonResponse,
-    stimulus: `
-      <div style="font-size:24px; padding:20px;">
-        Block ${b + 1} of ${NUM_BLOCKS}
-      </div>
-    `,
-    choices: ["Begin Block"]
-  });
-
-  for (let t = 0; t < TRIALS_PER_BLOCK; t++) {
-
-    const shuffledImages =
-      jsPsychInstance.randomization.shuffle([...MAIN_BLOCKS[b][t]]);
-
-    timeline.push(makePreviewPage(shuffledImages));
-
-    timeline.push({
-      type: EmotionGridPlugin,
-      participant: window.PARTICIPANT_ID,
-      phase: "main",
-      block_number: b + 1,
-      trial_number: globalTrialNumber,
-      trial_number_in_block: t + 1,
-      total_trials: TOTAL_MAIN_TRIALS,
-      total_trials_in_block: TRIALS_PER_BLOCK,
-      images: shuffledImages,
-      image_order: shuffledImages
-    });
-
-    timeline.push(attention_star_page);
-
-    globalTrialNumber++;
-  }
-
-  if (b === 0) {
-    timeline.push(balloonMiniGame(15));
-    timeline.push(makeCelebrationPage());
-  }
-
-}
-
-
 const save_data = {
   type: jsPsychPipe,
   action: "save",
@@ -1162,7 +1165,5 @@ const finish_page = {
   `,
   choices: ["Finish"]
 };
-
-timeline.push(save_data, finish_page);
 
 jsPsychInstance.run(timeline);
