@@ -1075,8 +1075,14 @@ function getLeftStartPosition() {
   const focalWidth = SMALL_SIZE * FOCAL_SCALE;
   const half = focalWidth / 2;
 
+  // keep at least 20px from stage left edge
+  const minX = half + 20;
+
+  // place just left of grid but never off-screen
+  const idealX = GRID_X - half - 20;
+
   return {
-    x: GRID_X - half - 20,   // 20px gap from grid
+    x: Math.max(minX, idealX),
     y: GRID_Y + GRID_HEIGHT / 2
   };
 }
