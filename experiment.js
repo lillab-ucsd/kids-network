@@ -2,18 +2,18 @@ const DEMO_PARTICIPANT = "demo";
 
 const MINI_PRACTICE_IMAGES = [
   "stimuli/food/pizza_1.jpg",
-  "stimuli/food/pizza_2.jpg",
+  "stimuli/food/hamburger.jpg",
   "stimuli/food/french_fries_1.jpg",
-  "stimuli/food/french_fries_2.jpg",
-  "stimuli/artifact/snowman_1.jpg",
+  "stimuli/food/ice_cream_1.jpg",
+  "stimuli/food/cookie.jpg",
 ];
 
 const MINI_PRACTICE_IMAGES_2 = [
-  "stimuli/food/ice_cream_1.jpg",
-  "stimuli/food/ice_cream_2.jpg",
-  "stimuli/food/chocolate_1.jpg",
+  "stimuli/food/toast.jpg",
+  "stimuli/food/bread.jpg",
+  "stimuli/food/croissant.jpg",
   "stimuli/food/chocolate_2.jpg",
-  "stimuli/cloud.jpg"
+  "stimuli/food/candy.jpg"
 ];
 
 const NUM_BLOCKS = 3;
@@ -24,6 +24,66 @@ let MAIN_BLOCKS = [];
 let randomizedCategoryOrder = [];
 let useReverseSetOrder = false;
 
+const sorting_instruction_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:40px;
+      text-align:center;
+    ">
+      <div style="font-size:28px; font-weight:600; margin-bottom:30px;">
+        This is how to sort pictures
+      </div>
+
+      <div style="
+        display:flex;
+        justify-content:center;
+        gap:80px;
+        align-items:flex-start;
+      ">
+
+        <!-- CORRECT -->
+        <div style="position:relative;">
+          <img src="stimuli/examples/correct_example.png"
+               style="width:500px; border:3px solid #4CAF50;">
+          <div style="
+            position:absolute;
+            top:-20px;
+            right:-20px;
+            font-size:48px;
+            color:#4CAF50;
+            font-weight:bold;
+          ">✓</div>
+          <div style="margin-top:10px; font-size:20px; color:#4CAF50;">
+            Good sorting
+          </div>
+        </div>
+
+        <!-- WRONG -->
+        <div style="position:relative;">
+          <img src="stimuli/examples/wrong_example.png"
+               style="width:500px; border:3px solid #d32f2f;">
+          <div style="
+            position:absolute;
+            top:-20px;
+            right:-20px;
+            font-size:48px;
+            color:#d32f2f;
+            font-weight:bold;
+          ">✗</div>
+          <div style="margin-top:10px; font-size:20px; color:#d32f2f;">
+            Not like this
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `,
+  choices: ["Start Practice"]
+};
 
 /* ---------- category structure ---------- */
 
@@ -342,6 +402,7 @@ class EmotionGridPlugin {
     }));
 
     let dragState = null;
+
     let currentFocusIdx = 0;
     let allImagesShown = false;
     let warningMessage = "";
@@ -418,24 +479,9 @@ class EmotionGridPlugin {
       return SMALL_SIZE;
     }
 
-    function logPlacement(index) {
-      const item = imageState[index];
-      const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
-      if (!snapped) return;
-
-      moveLog.push({
-        participant,
-        phase,
-        block: blockNumber,
-        trial: trialNumber,
-        image: item.path.split("/").pop(),
-        grid_col: snapped.col + 1,
-        grid_row: snapped.row + 1,
-        timestamp: performance.now()
-      });
-    }
-
     /* ---------- Build HTML ---------- */
+
+/* ---------- Build HTML ---------- */
 
     display_element.innerHTML = `
       <div style="display:flex;justify-content:center;">
@@ -447,8 +493,8 @@ class EmotionGridPlugin {
         ">
           <div id="grid" style="
             position:absolute;
-            left:${GRID_X}px;
-            top:${GRID_Y}px;
+            left:${GRID_X - 3}px;
+            top:${GRID_Y - 3}px;
             width:${GRID_WIDTH}px;
             height:${GRID_HEIGHT}px;
             border:3px solid #444;
@@ -533,20 +579,25 @@ class EmotionGridPlugin {
         el.style.cursor = "grab";
 
         el.style.zIndex = item.zIndex || 1;
-        grid.appendChild(el);
+        stage.appendChild(el);
         imgEls.push(el);
 
-        if (!allImagesShown && index === currentFocusIdx) {
-          el.style.transform = "translate(-50%, -50%) scale(2)";
-        } else {
-          el.style.transform = "translate(-50%, -50%) scale(1)";
+        let scale = 1;
+
+        if (dragState && dragState.index === index) {
+          scale = DRAG_SCALE;
         }
+        else if (!item.hasBeenMoved && index === currentFocusIdx) {
+          scale = FOCAL_SCALE;
+        }
+
+        el.style.transform = `translate(-50%, -50%) scale(${scale})`;
 
         el.addEventListener("pointerdown", (e) => {
 
           e.preventDefault();
 
-          const rect = grid.getBoundingClientRect();
+          const rect = stage.getBoundingClientRect();
           const x = e.clientX - rect.left;
           const y = e.clientY - rect.top;
 
@@ -561,9 +612,9 @@ class EmotionGridPlugin {
           item.zIndex = highestZ;
           el.style.zIndex = highestZ;
 
-          el.style.transform = "translate(-50%, -50%) scale(1.6)";
-
           el.setPointerCapture(e.pointerId);
+
+          render();
         });
       });
 
@@ -574,31 +625,26 @@ class EmotionGridPlugin {
 
     stage.addEventListener("pointermove", (e) => {
 
-        if (!dragState || e.pointerId !== dragState.pointerId) return;
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-        const rect = grid.getBoundingClientRect();   // 🔥 changed
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+      const rect = stage.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-        const index = dragState.index;
+      const index = dragState.index;
 
-        const currentSize = SMALL_SIZE * DRAG_SCALE;
+      const newX = x - dragState.offsetX;
+      const newY = y - dragState.offsetY;
 
-        let newX = x - dragState.offsetX;
-        let newY = y - dragState.offsetY;
+      imageState[index].stageX = newX;
+      imageState[index].stageY = newY;
 
-        newX = clamp(newX, currentSize/2, GRID_WIDTH - currentSize/2);
-        newY = clamp(newY, currentSize/2, GRID_HEIGHT - currentSize/2);
-
-        imageState[index].stageX = newX;
-        imageState[index].stageY = newY;
-
-        const el = imgEls[index];
-        if (el) {
-          el.style.left = `${newX}px`;
-          el.style.top = `${newY}px`;
-        }
-      });
+      const el = imgEls[index];
+      if (el) {
+        el.style.left = `${newX}px`;
+        el.style.top = `${newY}px`;
+      }
+    });
 
     stage.addEventListener("pointerup", (e) => {
 
@@ -608,82 +654,91 @@ class EmotionGridPlugin {
       dragState = null;
 
       const item = imageState[index];
-      const snapped = getSnappedCellOrNull(item.stageX, item.stageY);
 
-      if (!snapped) {
-        render();
-        return;
+      item.hasBeenMoved = true;
+      const el = imgEls[index];  
+      const half = SMALL_SIZE / 2;
+
+      item.stageX = clamp(
+        item.stageX,
+        GRID_X + half,
+        GRID_X + GRID_WIDTH - half
+      );
+
+      item.stageY = clamp(
+        item.stageY,
+        GRID_Y + half,
+        GRID_Y + GRID_HEIGHT - half
+      );
+
+      if (el) {
+        el.style.left = `${item.stageX}px`;
+        el.style.top = `${item.stageY}px`;
       }
 
-      const conflict = imageState.some((other, i) => {
-        if (i === index || !other.introduced) return false;
-        const otherSnap = getSnappedCellOrNull(other.stageX, other.stageY);
-        return otherSnap &&
-              otherSnap.col === snapped.col &&
-              otherSnap.row === snapped.row;
+      moveLog.push({
+        participant,
+        phase,
+        block: blockNumber,
+        trial: trialNumber,
+        image: item.path.split("/").pop(),
+        posX: item.stageX,
+        posY: item.stageY,
+        timestamp: performance.now()
       });
 
-      if (conflict) {
-        warningMessage = "Only one picture per square!";
-        warningEl.textContent = warningMessage;
-        render();
-        return;
-      }
-
-      item.stageX = snapped.x;
-      item.stageY = snapped.y;
-      item.hasBeenMoved = true;
-      warningMessage = "";
-      warningEl.textContent = "";
-
-      logPlacement(index);
-
-      if (!allImagesShown &&
-          index === currentFocusIdx &&
-          item.hasBeenMoved) {
-
+// --- ADDED LOGIC: Spawn the next image in the sequence ---
+      if (!allImagesShown && index === currentFocusIdx && item.hasBeenMoved) {
         if (currentFocusIdx < imageState.length - 1) {
+          // Bring in the next image
           currentFocusIdx++;
           imageState[currentFocusIdx].introduced = true;
 
-          const center = getCenterPosition();
-          imageState[currentFocusIdx].stageX = center.x;
-          imageState[currentFocusIdx].stageY = center.y;
+          // Renamed to nextPos to avoid conflict
+          const nextPos = getLeftStartPosition(); 
+          imageState[currentFocusIdx].stageX = nextPos.x;
+          imageState[currentFocusIdx].stageY = nextPos.y;
 
           highestZ++;
           imageState[currentFocusIdx].zIndex = highestZ;
-
-          render();
         } else {
+          // If there are no more images, show the Continue button
           allImagesShown = true;
           continueBtn.style.display = "inline-block";
         }
       }
 
-      const el = imgEls[index];
-      if (el) {
-        el.style.transform = "translate(-50%, -50%) scale(1)";
-      }
-
       render();
     });
 
+    // --- ADDED LOGIC: Make the Continue button actually finish the trial ---
     continueBtn.addEventListener("click", () => {
+
+      const placements = imageState.map(item => ({
+        image_name: item.path.split("/").pop(),
+        posX: item.stageX,
+        posY: item.stageY
+      }));
+
       jsPsych.finishTrial({
         participant,
         phase,
         block: blockNumber,
         trial: trialNumber,
-        move_log: moveLog
+        placements: JSON.stringify(placements),
+        move_log: JSON.stringify(moveLog),
+        is_final_summary: 1
       });
+
     });
 
     /* ---------- Start ---------- */
 
     imageState[0].introduced = true;
-    const center = getCenterPosition();
-    imageState[0].stageX = GRID_WIDTH / 2;
-    imageState[0].stageY = GRID_HEIGHT / 2;
+
+    const startPos = getLeftStartPosition();
+    imageState[0].stageX = startPos.x;
+    imageState[0].stageY = startPos.y;
 
     render();
   }
@@ -1016,6 +1071,16 @@ function makeCelebrationPage(message = "Great job!") {
   };
 }
 
+function getLeftStartPosition() {
+  const focalWidth = SMALL_SIZE * FOCAL_SCALE;
+  const half = focalWidth / 2;
+
+  return {
+    x: GRID_X - half - 20,   // 20px gap from grid
+    y: GRID_Y + GRID_HEIGHT / 2
+  };
+}
+
 function balloonMiniGame(totalBalloons = 10) {
   return {
     type: jsPsychHtmlButtonResponse,
@@ -1137,9 +1202,7 @@ const timeline = [
   participant_info_trial,
   preload_trial,
   practice_intro,
-  makePreviewPage(MINI_PRACTICE_IMAGES),
-  mini_practice_trial,
-  makeCelebrationPage("Great job! Let's try one more!"),
+  sorting_instruction_page, 
   makePreviewPage(MINI_PRACTICE_IMAGES_2),
   mini_practice_trial_2,
   makeCelebrationPage("Awesome! Now you're ready!"),
