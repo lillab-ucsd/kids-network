@@ -1,0 +1,229 @@
+---
+title: "kidsnet_pilot"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+```{r}
+library(tidyverse)
+library(jsonlite)
+library(purrr)
+```
+
+```{r}
+data_path <- "pilot_data"
+
+all_data <- list.files(data_path, pattern = "*.csv", full.names = TRUE) %>%
+  map_dfr(~ read_csv(.x, col_types = cols(.default = "c")))
+```
+
+```{r}
+all_data <- all_data %>%
+  mutate(
+    participant_id = as.character(participant_id),
+    participant_id = str_extract(participant_id, "\\d+"),  # extract numeric part
+    participant_id = paste0("p", str_pad(participant_id, 3, pad = "0"))
+  )
+```
+
+```{r}
+grid_trials <- all_data %>%
+  filter(trial_type == "emotion-grid")
+```
+
+```{r}
+extract_final_placements <- function(row) {
+  
+  if (is.na(row$move_log) || row$move_log == "[]") return(NULL)
+  
+  parsed <- tryCatch(fromJSON(row$move_log), error = function(e) NULL)
+  if (is.null(parsed)) return(NULL)
+  
+  # Must have grid positions
+  if (!all(c("grid_col", "grid_row") %in% names(parsed))) return(NULL)
+  
+  # Detect image column
+  img_col <- if ("image_name" %in% names(parsed)) "image_name" else
+             if ("image" %in% names(parsed)) "image" else NULL
+  
+  if (is.null(img_col)) return(NULL)
+  
+  # If timestamp exists, reconstruct final placement
+  if ("timestamp" %in% names(parsed)) {
+    
+    parsed %>%
+      mutate(
+        grid_col = as.numeric(grid_col),
+        grid_row = as.numeric(grid_row),
+        timestamp = as.numeric(timestamp)
+      ) %>%
+      group_by(.data[[img_col]]) %>%
+      arrange(timestamp) %>%
+      slice_tail(n = 1) %>%
+      ungroup() %>%
+      transmute(
+        participant_id = row$participant_id,
+        block = as.numeric(row$block),
+        trial = as.numeric(row$trial),
+        image_name = .data[[img_col]],
+        posX = grid_col,
+        posY = grid_row
+      )
+    
+  } else {
+    
+    # If no timestamp, assume already final
+    parsed %>%
+      transmute(
+        participant_id = row$participant_id,
+        block = as.numeric(row$block),
+        trial = as.numeric(row$trial),
+        image_name = .data[[img_col]],
+        posX = as.numeric(grid_col),
+        posY = as.numeric(grid_row)
+      )
+  }
+}
+```
+
+```{r}
+final_placements <- grid_trials %>%
+  split(seq(nrow(.))) %>%
+  map_dfr(~ extract_final_placements(.x)) %>%
+  mutate(trial = as.numeric(trial)) %>%
+  filter(trial > 0)
+```
+
+```{r}
+final_placements <- final_placements %>%
+  filter(trial != -1)
+```
+
+```{r}
+final_placements <- final_placements %>%
+  mutate(
+    category = case_when(
+      str_detect(image_name, "happy|sad|angry|fearful|surprise|disgust") ~ "emotion",
+      str_detect(image_name,
+                 "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animal",
+      str_detect(image_name, 
+                 "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plant"
+    )
+  )
+
+final_placements <- final_placements %>%
+  mutate(
+    set = str_extract(image_name, "_\\d+") %>% 
+          str_remove("_"),
+    base_name = str_remove(image_name, "_\\d+")
+  )
+```
+
+```{r}
+compute_distance_vector <- function(df) {
+  
+  coords <- df %>%
+    arrange(base_name) %>%
+    select(posX, posY) %>%
+    as.matrix()
+  
+  dist_matrix <- as.matrix(dist(coords))
+  dist_matrix[upper.tri(dist_matrix)]
+}
+```
+
+```{r}
+dist_data <- final_placements %>%
+  group_by(participant_id, category, set) %>%
+  nest() %>%
+  mutate(dist_vec = map(data, compute_distance_vector)) %>%
+  select(-data)
+```
+
+```{r}
+consistency_results <- dist_data %>%
+  group_by(participant_id, category) %>%
+  summarise(
+    consistency = {
+      vecs <- dist_vec
+      if (length(vecs) < 2) return(NA_real_)
+      
+      combs <- combn(seq_along(vecs), 2)
+      
+      cors <- apply(combs, 2, function(idx) {
+        cor(vecs[[idx[1]]], vecs[[idx[2]]], use = "complete.obs")
+      })
+      
+      mean(cors, na.rm = TRUE)
+    },
+    .groups = "drop"
+  )
+```
+
+```{r}
+consistency_results
+```
+
+```{r}
+write.csv(final_placements, "final_placements.csv", row.names = FALSE)
+```
+
+```{r}
+age_vector <- c(
+  5,7,5,4,4,5,5,5,7,5,
+  7,7,6,4,5,4,6,5,3,8,
+  6,4,4,8,6
+)
+
+age_df <- tibble(
+  participant_id = paste0("p", str_pad(2:26, 3, pad = "0")),
+  age = age_vector
+)
+
+consistency_results <- consistency_results %>%
+  left_join(age_df, by = "participant_id")
+```
+
+```{r}
+consistency_results <- consistency_results %>%
+  mutate(
+    age_group = case_when(
+      age <= 4 ~ "3–4",
+      age <= 6 ~ "5–6",
+      age >= 7 ~ "7–8"
+    )
+  )
+```
+
+```{r}
+consistency_summary <- consistency_results %>%
+  group_by(age_group, category) %>%
+  summarise(
+    mean_consistency = mean(consistency, na.rm = TRUE),
+    sd_consistency = sd(consistency, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
+
+consistency_summary
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(consistency_results,
+       aes(x = age_group, y = consistency, fill = category)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    x = "Age Group",
+    y = "Consistency (Correlation)",
+    title = "Semantic Arrangement Consistency by Age Group"
+  )
+```
