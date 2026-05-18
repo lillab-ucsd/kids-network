@@ -262,7 +262,14 @@ const FOCAL_SCALE = 2;
 const DRAG_SCALE = 1.8;
 const CONFLICT_OFFSET = 42;
 
-const GRID_X = (BASE_TASK_WIDTH - GRID_WIDTH) / 2;
+const GAP = 40;
+
+const focalWidth = SMALL_SIZE * FOCAL_SCALE;
+const totalWidth = focalWidth + GAP + GRID_WIDTH;
+
+const LEFT_EDGE = (BASE_TASK_WIDTH - totalWidth) / 2;
+
+const GRID_X = LEFT_EDGE + focalWidth + GAP;
 const GRID_Y = 52;
 
 const WARNING_Y = 690;
@@ -472,24 +479,6 @@ class EmotionGridPlugin {
 
     const moveLog = [];
 
-    /* ---------- Layout ---------- */
-
-    const BASE_WIDTH = 1160;
-    const BASE_HEIGHT = 760;
-
-    const GRID_COLS = 10;
-    const GRID_ROWS = 6;
-    const CELL_SIZE = 104;
-
-    const GRID_WIDTH = GRID_COLS * CELL_SIZE;
-    const GRID_HEIGHT = GRID_ROWS * CELL_SIZE;
-
-    const GRID_X = (BASE_WIDTH - GRID_WIDTH) / 2;
-    const GRID_Y = 80;
-
-    const SMALL_SIZE = 90;
-    const FOCAL_SCALE = 2;
-    const DRAG_SCALE = 1.6;
 
     function clamp(val, min, max) {
       return Math.max(min, Math.min(max, val));
@@ -542,22 +531,20 @@ class EmotionGridPlugin {
       return SMALL_SIZE;
     }
 
-    /* ---------- Build HTML ---------- */
-
 /* ---------- Build HTML ---------- */
 
     display_element.innerHTML = `
       <div style="display:flex;justify-content:center;">
         <div id="stage" style="
-          width:${BASE_WIDTH}px;
-          height:${BASE_HEIGHT}px;
+          width:${BASE_TASK_WIDTH}px;
+          height:${BASE_TASK_HEIGHT}px;
           position:relative;
           background:#f5f5f5;
         ">
           <div id="grid" style="
             position:absolute;
-            left:${GRID_X}px;
-            top:${GRID_Y}px;
+            left:${GRID_X - 3}px;
+            top:${GRID_Y - 3}px;
             width:${GRID_WIDTH}px;
             height:${GRID_HEIGHT}px;
             border:3px solid #444;
@@ -1135,11 +1122,11 @@ function makeCelebrationPage(message = "Great job!") {
 }
 
 function getLeftStartPosition() {
+
   const focalWidth = SMALL_SIZE * FOCAL_SCALE;
-  const half = focalWidth / 2;
 
   return {
-    x: half + 40,  // 40px padding from stage left
+    x: LEFT_EDGE + focalWidth / 2,
     y: GRID_Y + GRID_HEIGHT / 2
   };
 }
