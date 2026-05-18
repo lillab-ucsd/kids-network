@@ -24,65 +24,128 @@ let MAIN_BLOCKS = [];
 let randomizedCategoryOrder = [];
 let useReverseSetOrder = false;
 
-const sorting_instruction_page = {
+const sorting_correct_page = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div style="
       display:flex;
       flex-direction:column;
+      justify-content:center;
       align-items:center;
-      padding:40px;
+      height:100vh;
       text-align:center;
     ">
-      <div style="font-size:28px; font-weight:600; margin-bottom:30px;">
-        This is how to sort pictures
-      </div>
 
       <div style="
-        display:flex;
-        justify-content:center;
-        gap:80px;
-        align-items:flex-start;
+        font-size:36px;
+        font-weight:700;
+        margin-bottom:40px;
       ">
-
-        <!-- CORRECT -->
-        <div style="position:relative;">
-          <img src="stimuli/examples/correct_example.png"
-               style="width:500px; border:3px solid #4CAF50;">
-          <div style="
-            position:absolute;
-            top:-20px;
-            right:-20px;
-            font-size:48px;
-            color:#4CAF50;
-            font-weight:bold;
-          ">✓</div>
-          <div style="margin-top:10px; font-size:20px; color:#4CAF50;">
-            Good sorting
-          </div>
-        </div>
-
-        <!-- WRONG -->
-        <div style="position:relative;">
-          <img src="stimuli/examples/wrong_example.png"
-               style="width:500px; border:3px solid #d32f2f;">
-          <div style="
-            position:absolute;
-            top:-20px;
-            right:-20px;
-            font-size:48px;
-            color:#d32f2f;
-            font-weight:bold;
-          ">✗</div>
-          <div style="margin-top:10px; font-size:20px; color:#d32f2f;">
-            Not like this
-          </div>
-        </div>
-
+        Put similar pictures together!
       </div>
+
+      <div style="position:relative; width:80vw; max-width:1000px;">
+        <img src="stimuli/examples/correct_example.png"
+             style="
+               width:100%;
+               max-height:65vh;
+               object-fit:contain;
+               border:8px solid #4CAF50;
+             ">
+        <div style="
+          position:absolute;
+          top:-30px;
+          right:-30px;
+          font-size:90px;
+          color:#4CAF50;
+          font-weight:bold;
+        ">✓</div>
+      </div>
+
+      <button id="correct-next-btn" style="
+        margin-top:40px;
+        font-size:24px;
+        padding:14px 40px;
+        border-radius:16px;
+        background:#4CAF50;
+        color:white;
+        border:none;
+        cursor:pointer;
+      ">
+        Next
+      </button>
+
     </div>
   `,
-  choices: ["Start Practice"]
+  choices: [],
+  on_load: function() {
+    document.getElementById("correct-next-btn")
+      .addEventListener("click", function() {
+        jsPsychInstance.finishTrial();
+      });
+  }
+};
+
+const sorting_wrong_page = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+      text-align:center;
+    ">
+
+      <div style="
+        font-size:36px;
+        font-weight:700;
+        margin-bottom:40px;
+      ">
+        Not like this
+      </div>
+
+      <div style="position:relative; width:80vw; max-width:1000px;">
+        <img src="stimuli/examples/wrong_example.png"
+             style="
+               width:100%;
+               max-height:65vh;
+               object-fit:contain;
+               border:8px solid #d32f2f;
+             ">
+        <div style="
+          position:absolute;
+          top:-30px;
+          right:-30px;
+          font-size:90px;
+          color:#d32f2f;
+          font-weight:bold;
+        ">✗</div>
+      </div>
+
+      <button id="wrong-start-btn" style="
+        margin-top:40px;
+        font-size:24px;
+        padding:14px 40px;
+        border-radius:16px;
+        background:#4CAF50;
+        color:white;
+        border:none;
+        cursor:pointer;
+      ">
+        Start Practice
+      </button>
+
+    </div>
+  `,
+  choices: [],
+  on_load: function() {
+    document.getElementById("wrong-start-btn")
+      .addEventListener("click", function() {
+        jsPsychInstance.finishTrial();
+      });
+  }
 };
 
 /* ---------- category structure ---------- */
@@ -493,8 +556,8 @@ class EmotionGridPlugin {
         ">
           <div id="grid" style="
             position:absolute;
-            left:${GRID_X - 3}px;
-            top:${GRID_Y - 3}px;
+            left:${GRID_X}px;
+            top:${GRID_Y}px;
             width:${GRID_WIDTH}px;
             height:${GRID_HEIGHT}px;
             border:3px solid #444;
@@ -1075,14 +1138,8 @@ function getLeftStartPosition() {
   const focalWidth = SMALL_SIZE * FOCAL_SCALE;
   const half = focalWidth / 2;
 
-  // keep at least 20px from stage left edge
-  const minX = half + 20;
-
-  // place just left of grid but never off-screen
-  const idealX = GRID_X - half - 20;
-
   return {
-    x: Math.max(minX, idealX),
+    x: half + 40,  // 40px padding from stage left
     y: GRID_Y + GRID_HEIGHT / 2
   };
 }
@@ -1208,7 +1265,8 @@ const timeline = [
   participant_info_trial,
   preload_trial,
   practice_intro,
-  sorting_instruction_page, 
+  sorting_correct_page,
+  sorting_wrong_page,
   makePreviewPage(MINI_PRACTICE_IMAGES_2),
   mini_practice_trial_2,
   makeCelebrationPage("Awesome! Now you're ready!"),
