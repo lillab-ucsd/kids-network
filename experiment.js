@@ -1,7 +1,7 @@
 const DEMO_PARTICIPANT = "demo";
 
 const MINI_PRACTICE_IMAGES = [
-  "stimuli/food/pizza_1.jpg",
+  "stimuli/food/sandwich.jpg",
   "stimuli/food/hamburger.jpg",
   "stimuli/food/french_fries_1.jpg",
   "stimuli/food/ice_cream_1.jpg",
