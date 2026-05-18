@@ -270,7 +270,7 @@ const totalWidth = focalWidth + GAP + GRID_WIDTH;
 const LEFT_EDGE = (BASE_TASK_WIDTH - totalWidth) / 2;
 
 const GRID_X = LEFT_EDGE + focalWidth + GAP;
-const GRID_Y = 52;
+const GRID_Y = (BASE_TASK_HEIGHT - GRID_HEIGHT) / 2 + 20;
 
 const WARNING_Y = 690;
 const TOPBAR_Y = 10;
