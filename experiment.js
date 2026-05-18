@@ -1252,6 +1252,8 @@ const timeline = [
   participant_info_trial,
   preload_trial,
   practice_intro,
+  makePreviewPage(MINI_PRACTICE_IMAGES),
+  mini_practice_trial,
   sorting_correct_page,
   sorting_wrong_page,
   makePreviewPage(MINI_PRACTICE_IMAGES_2),
