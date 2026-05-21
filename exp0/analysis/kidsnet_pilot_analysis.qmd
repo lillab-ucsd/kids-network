@@ -14,13 +14,14 @@ Quarto enables you to weave together content and executable code into a finished
 library(tidyverse)
 library(jsonlite)
 library(purrr)
+library(here)
+
 ```
 
 ```{r}
-data_path <- "pilot_data"
-
-all_data <- list.files(data_path, pattern = "*.csv", full.names = TRUE) %>%
-  map_dfr(~ read_csv(.x, col_types = cols(.default = "c")))
+data_path <- "/Users/apple/Desktop/UCSD/kids-network/exp0/data"
+files <- list.files(data_path, pattern = "\\.csv$", full.names = TRUE)
+all_data <- map_dfr(files, ~ read_csv(.x, col_types = cols(.default = "c")))
 ```
 
 ```{r}
@@ -109,11 +110,11 @@ final_placements <- final_placements %>%
 final_placements <- final_placements %>%
   mutate(
     category = case_when(
-      str_detect(image_name, "happy|sad|angry|fearful|surprise|disgust") ~ "emotion",
+      str_detect(image_name, "happy|sad|angry|fearful|surprise|disgust") ~ "emotions",
       str_detect(image_name,
-                 "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animal",
+                 "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animals",
       str_detect(image_name, 
-                 "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plant"
+                 "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plants"
     )
   )
 

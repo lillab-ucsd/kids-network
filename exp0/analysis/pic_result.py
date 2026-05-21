@@ -5,10 +5,10 @@ import os
 
 # ---------------- SETTINGS ----------------
 GRID_COLS = 10
-GRID_ROWS = 10
+GRID_ROWS = 6
 CELL_SIZE = 1
 OUTPUT_DIR = "reconstructed_layouts"
-STIM_ROOT = "stimuli"
+STIM_ROOT = "../experiment-scripts/stimuli"
 # ------------------------------------------
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -25,7 +25,7 @@ grouped = df.groupby(["participant_id", "category", "trial"])
 
 for (pid, category, trial), data in grouped:
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     # Draw grid
     for i in range(GRID_ROWS + 1):
