@@ -134,7 +134,7 @@ const sorting_wrong_page = {
         border:none;
         cursor:pointer;
       ">
-        Start Practice
+        Next
       </button>
 
     </div>
@@ -1254,8 +1254,8 @@ const timeline = [
   practice_intro,
   makePreviewPage(MINI_PRACTICE_IMAGES),
   mini_practice_trial,
-  sorting_correct_page,
   sorting_wrong_page,
+  sorting_correct_page,
   makePreviewPage(MINI_PRACTICE_IMAGES_2),
   mini_practice_trial_2,
   makeCelebrationPage("Awesome! Now you're ready!"),
