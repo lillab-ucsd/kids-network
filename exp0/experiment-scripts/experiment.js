@@ -41,7 +41,7 @@ const sorting_correct_page = {
         font-weight:700;
         margin-bottom:40px;
       ">
-        Put similar pictures together!
+        Put things that go together closer!
       </div>
 
       <div style="position:relative; width:80vw; max-width:1000px;">
