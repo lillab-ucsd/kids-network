@@ -965,14 +965,25 @@ const participant_info_trial = {
   }
 };
 
+const STATIC_IMAGES = [
+  "stimuli/examples/correct_example.png",
+  "stimuli/examples/wrong_example.png",
+  "stimuli/star.png",
+  "stimuli/fireworks.gif"
+];
+
 const preload_trial = {
   type: jsPsychPreload,
   images: [
     ...Object.values(CATEGORIES).flat(2),
     ...BALLOON_IMAGES,
     ...MINI_PRACTICE_IMAGES,
-    ...MINI_PRACTICE_IMAGES_2
-  ]
+    ...MINI_PRACTICE_IMAGES_2,
+    ...STATIC_IMAGES
+  ],
+  show_detailed_errors: true,   // surface any load failures
+  continue_after_error: false,  // halt so you can see what failed
+  max_load_time: 60000          // 60s budget (default is unlimited)
 };
 
 const practice_intro = {
