@@ -12,236 +12,321 @@ editor: visual
 library(tidyverse)
 library(jsonlite)
 library(here)
-```
+library(mclust)
 
-# Load data
-
-```{r}
-#| message: false
-data_path <- "/Users/apple/Desktop/UCSD/kids-network/exp0/data"
-
-all_data <- list.files(data_path, pattern = "\\.csv$", full.names = TRUE) %>%
-  map_dfr(~ read_csv(.x, col_types = cols(.default = "c")))
-```
-
-# Normalize participant IDs
-
-```{r}
-# clean participant ID
-all_data <- all_data %>%
-  mutate(
-    participant_id = participant_id %>%
-      as.character() %>%
-      str_extract("\\d+") %>%               
-      str_pad(width = 3, pad = "0") %>%      
-      paste0("p", .)                       
+# Avoid masking by plyr/etc.
+suppressMessages({
+  library(conflicted)
+  conflicts_prefer(
+    dplyr::filter, dplyr::select, dplyr::mutate, dplyr::summarise,
+    dplyr::count, dplyr::arrange, dplyr::slice, dplyr::rename, purrr::map,
+    .quiet = TRUE
   )
+})
+
+# Base data path
+base_path <- "/Users/apple/Desktop/UCSD/kids-network/exp0/data"
 ```
 
-# Filter to grid trials
+# Shared helpers
+
+Two versions (grid, free-sort) share the same downstream logic — only the position-field names differ. Helpers go here so each version stays short.
 
 ```{r}
-# filter for relevant trials
-grid_trials <- all_data %>%
-  filter(trial_type == "emotion-grid",
-         !is.na(block), block != "null")
-```
+#Extract final placement positions from grid version
+extract_final_placements <- function(row, x_field, y_field,
+                                     source_col = "move_log") {
 
-```{r}
-all_data %>%
-  filter(trial_type == "emotion-grid", !is.na(block), block != "null") %>%
-  mutate(
-    has_move_log   = !is.na(move_log)   & move_log   != "[]",
-    has_placements = !is.na(placements) & placements != "[]"
-  ) %>%
-  dplyr::count(participant_id, has_move_log, has_placements) %>%
-  dplyr::arrange(participant_id) %>%
-  print(n = Inf)
-```
+  raw <- row[[source_col]]
+  if (is.na(raw) || raw == "[]") return(NULL)
 
-# Reconstruct final image placements from move log
+  parsed <- tryCatch(fromJSON(raw), error = function(e) NULL)
+  if (is.null(parsed) || !is.data.frame(parsed)) return(NULL)
 
-```{r}
-#function for extracting final placements
-#future data should contain a placement column
-extract_final_placements <- function(row) {
+  if (!all(c(x_field, y_field) %in% names(parsed))) return(NULL)
 
-  if (is.na(row$move_log) || row$move_log == "[]") return(NULL)
-
-  parsed <- tryCatch(fromJSON(row$move_log), error = function(e) NULL)
-  if (is.null(parsed)) return(NULL)
-
-  # Must have grid positions
-  if (!all(c("grid_col", "grid_row") %in% names(parsed))) return(NULL)
-
-  # Detect image-name column (varies across versions)
   img_col <- if ("image_name" %in% names(parsed)) "image_name"
              else if ("image" %in% names(parsed)) "image"
              else return(NULL)
 
-  result <- parsed %>%
-    mutate(
-      grid_col = as.numeric(grid_col),
-      grid_row = as.numeric(grid_row)
-    )
+  parsed$posX <- suppressWarnings(as.numeric(parsed[[x_field]]))
+  parsed$posY <- suppressWarnings(as.numeric(parsed[[y_field]]))
 
-  # If timestamps exist, keep only the last placement per image
-  if ("timestamp" %in% names(result)) {
-    result <- result %>%
-      mutate(timestamp = as.numeric(timestamp)) %>%
+  # Only relevant for move_log (history) — no-op for placements (already final)
+  if ("timestamp" %in% names(parsed)) {
+    parsed <- parsed %>%
+      mutate(timestamp = suppressWarnings(as.numeric(timestamp))) %>%
       group_by(.data[[img_col]]) %>%
       arrange(timestamp) %>%
       slice_tail(n = 1) %>%
       ungroup()
   }
 
-  result %>%
+  parsed %>%
     transmute(
       participant_id = row$participant_id,
-      block          = as.numeric(row$block),
-      trial          = as.numeric(row$trial),
+      block          = suppressWarnings(as.numeric(row$block)),
+      trial          = suppressWarnings(as.numeric(row$trial)),
       image_name     = .data[[img_col]],
-      posX           = grid_col,
-      posY           = grid_row
+      posX, posY
     )
 }
 ```
 
 ```{r}
-final_placements <- grid_trials %>%
-  split(seq(nrow(.))) %>%
-  map_dfr(extract_final_placements) %>%
-  mutate(trial = as.numeric(trial)) %>%
-  filter(trial > 0)
+# Tag category / base_name / set from image filename.
+# Image filenames look like "happy_1.png", "horse_2.jpg", etc.
+tag_categories <- function(df) {
+  df %>%
+    mutate(
+      image_stem = str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+      base_name  = str_remove(image_stem,  "_\\d+$"),
+      set        = str_extract(image_stem, "\\d+$") %>% as.integer(),
+      category   = case_when(
+        str_detect(base_name,
+                   "happy|sad|angry|fearful|surprise|disgust") ~ "emotions",
+        str_detect(base_name,
+                   "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animals",
+        str_detect(base_name,
+                   "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plants"
+      )
+    )
+}
 ```
 
-# Tag category, set, and base name
-
 ```{r}
-final_placements <- final_placements %>%
-  mutate(
-    category = case_when(
-      str_detect(image_name, "happy|sad|angry|fearful|surprise|disgust") ~ "emotions",
-      str_detect(image_name,
-                 "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animals",
-      str_detect(image_name,
-                 "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plants"
-    ),
-    set       = str_remove(str_extract(image_name, "_\\d+"), "_"),
-    base_name = str_remove(image_name, "_\\d+")
-  )
+# Normalize "p###" participant IDs from raw column.
+normalize_pid <- function(x) {
+  str_extract(as.character(x), "\\d+") %>%
+    str_pad(width = 3, pad = "0") %>%
+    str_c("p", .)
+}
+
+# Load all CSVs from a folder, normalize IDs.
+load_folder <- function(folder) {
+  list.files(folder, pattern = "\\.csv$", full.names = TRUE) %>%
+    map_dfr(~ read_csv(.x, col_types = cols(.default = "c"))) %>%
+    mutate(participant_id = normalize_pid(participant_id))
+}
+
+# Build final_placements.
+build_placements <- function(folder, trial_type_label, x_field, y_field,
+                             source_col = "move_log") {
+  all_data <- load_folder(folder)
+
+  trials <- all_data %>%
+    filter(trial_type == trial_type_label,
+           !is.na(block), block != "null")
+
+  if (nrow(trials) == 0) {
+    stop("No rows matched trial_type == '", trial_type_label,
+         "'. trial_type values present: ",
+         paste(unique(all_data$trial_type), collapse = ", "))
+  }
+
+  out <- trials %>%
+    split(seq_len(nrow(.))) %>%
+    map_dfr(~ extract_final_placements(.x, x_field, y_field, source_col))
+
+  if (nrow(out) == 0) {
+    stop("Extraction returned 0 placements from '", source_col, "'. ",
+         "Check x_field/y_field ('", x_field, "', '", y_field,
+         "') against the JSON keys in that column.")
+  }
+
+  out %>%
+    mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+    filter(!is.na(trial), trial > 0) %>%
+    tag_categories()
+}
 ```
 
-# Compute pairwise-distance vector per participant × category × set
-
 ```{r}
-# Helper: pairwise distance vector from coords (sorted by base_name for alignment)
-compute_distance_vector <- function(df) {
+# Pairwise-distance vector from a set of coords, sorted by base_name
+compute_dist_vec <- function(df) {
   coords <- df %>%
     arrange(base_name) %>%
     select(posX, posY) %>%
     as.matrix()
+  as.vector(dist(coords))
+}
+```
 
-  dist_matrix <- as.matrix(dist(coords))
-  dist_matrix[upper.tri(dist_matrix)]
+```{r}
+# Test-retest consistency per (participant, category).
+#
+# For each trial, average duplicate-emotion picture positions to one
+# point per concept (no-op for animal/plant since they have 1 pic/concept).
+# Then correlate trial 1 vs trial 2 distance vectors.
+#
+# Returns one row per (participant_id, category) with column `consistency`.
+compute_consistency <- function(final_placements) {
+
+  trial_positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+
+  trial_dist <- trial_positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dist_vec = map(data, compute_dist_vec)) %>%
+    select(-data)
+
+  trial_dist %>%
+    group_by(participant_id, category) %>%
+    summarise(
+      consistency = if (length(dist_vec) < 2) NA_real_
+                    else cor(dist_vec[[1]], dist_vec[[2]],
+                             use = "complete.obs"),
+      n_trials    = length(dist_vec),
+      .groups     = "drop"
+    )
+}
+```
+
+```{r}
+# Emotions-only: within-trial duplicate clustering.
+# Within each emotion trial, correlate set-1 vs set-2 distance vectors,
+# then average across the participant's emotion trials.
+compute_within_trial <- function(final_placements) {
+  final_placements %>%
+    filter(category == "emotions") %>%
+    group_by(participant_id, trial, set) %>%
+    nest() %>%
+    mutate(dist_vec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, trial) %>%
+    summarise(
+      within_cor = if (length(dist_vec) < 2) NA_real_
+                   else cor(dist_vec[[1]], dist_vec[[2]],
+                            use = "complete.obs"),
+      .groups = "drop"
+    ) %>%
+    group_by(participant_id) %>%
+    summarise(
+      within_trial_consistency = mean(within_cor, na.rm = TRUE),
+      n_trials = sum(!is.na(within_cor)),
+      .groups = "drop"
+    )
+}
+```
+
+```{r}
+# Cluster the concepts in one trial, return cluster labels in base_name order.
+cluster_trial <- function(df, k) {
+  coords <- df %>% arrange(base_name) %>% select(posX, posY) %>% as.matrix()
+  hc <- hclust(dist(coords), method = "ward.D2")
+  cutree(hc, k = k)
 }
 
-# Collapse to one position per concept per trial.
-#   - animals/plants: 1 picture per concept per trial, so mean() is a no-op
-#   - emotions: averages the 2 within-trial pictures of each emotion
-trial_positions <- final_placements %>%
-  group_by(participant_id, category, trial, base_name) %>%
-  summarise(
-    posX = mean(posX),
-    posY = mean(posY),
-    .groups = "drop"
-  )
+# Cluster-based consistency: ARI between trial 1 and trial 2 cluster labels.
+compute_cluster_consistency <- function(final_placements, k = 3) {
 
-# One distance vector per (participant × category × trial)
-trial_dist <- trial_positions %>%
+  trial_positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+
+  trial_clusters <- trial_positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(cluster = map(data, ~ cluster_trial(.x, k = k))) %>%
+    select(-data)
+
+  trial_clusters %>%
+    group_by(participant_id, category) %>%
+    summarise(
+      cluster_consistency = if (length(cluster) < 2) NA_real_
+                            else mclust::adjustedRandIndex(cluster[[1]],
+                                                          cluster[[2]]),
+      n_trials = length(cluster),
+      .groups = "drop"
+    )
+}
+```
+
+# Grid version
+
+```{r}
+#| message: false
+final_placements_grid <- build_placements(
+  folder           = file.path(base_path, "grid_sort"),
+  trial_type_label = "emotion-grid",
+  x_field          = "grid_col",
+  y_field          = "grid_row"
+)
+```
+
+```{r}
+# Sanity check: each participant × category should have 2 trials,
+# and within each trial each base_name should appear the expected # of times.
+final_placements_grid %>%
   group_by(participant_id, category, trial) %>%
-  nest() %>%
-  mutate(dist_vec = map(data, compute_distance_vector)) %>%
-  select(-data)
+  summarise(n_concepts = n_distinct(base_name),
+            n_images   = n(), .groups = "drop") %>%
+  count(category, n_concepts, n_images)
 ```
 
 ```{r}
-# Alternative test-retest for emotions: average over all set pairings
-emotion_test_retest_pairings <- final_placements %>%
-  filter(category == "emotions") %>%
-  group_by(participant_id, trial, set) %>%
-  nest() %>%
-  mutate(dist_vec = map(data, compute_distance_vector)) %>%
-  select(-data) %>%
-  group_by(participant_id) %>%
-  summarise(
-    consistency = {
-      # sets {1,2} are in trial 1; sets {3,4} are in trial 2
-      t1_sets <- dist_vec[set %in% c("1", "2")]
-      t2_sets <- dist_vec[set %in% c("3", "4")]
-      if (length(t1_sets) == 0 || length(t2_sets) == 0) NA_real_
-      else {
-        cors <- as.vector(outer(
-          seq_along(t1_sets), seq_along(t2_sets),
-          Vectorize(function(i, j) cor(t1_sets[[i]], t2_sets[[j]],
-                                       use = "complete.obs"))
-        ))
-        mean(cors, na.rm = TRUE)
-      }
-    },
-    .groups = "drop"
-  )
+write_csv(final_placements_grid, "final_placements_grid.csv")
 ```
 
-# Consistency: mean within-participant correlation across sets
+# Free-sort version
 
 ```{r}
-consistency_results <- dist_data %>%
-  group_by(participant_id, category) %>%
-  summarise(
-    consistency = if (length(dist_vec) < 2) {
-      NA_real_
-    } else {
-      combs <- combn(seq_along(dist_vec), 2)
-      cors  <- apply(combs, 2, function(idx) {
-        cor(dist_vec[[idx[1]]], dist_vec[[idx[2]]], use = "complete.obs")
-      })
-      mean(cors, na.rm = TRUE)
-    },
-    .groups = "drop"
-  )
-
-consistency_results
+#| message: false
+final_placements_free <- build_placements(
+  folder           = file.path(base_path, "free_sort"),
+  trial_type_label = "emotion-grid",   # same as grid — distinguished by folder
+  x_field          = "posX",
+  y_field          = "posY",
+  source_col       = "placements"
+)
 ```
 
 ```{r}
-final_placements %>%
-  group_by(participant_id, category, set) %>%
-  summarise(n_images = n_distinct(base_name), .groups = "drop") %>%
-  pivot_wider(names_from = set, values_from = n_images, names_prefix = "set_") %>%
-  filter(set_1 != set_2 | is.na(set_1) | is.na(set_2))
+final_placements_free %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name),
+            n_images   = n(), .groups = "drop") %>%
+  count(category, n_concepts, n_images)
 ```
 
 ```{r}
-names(final_placements)
-# should include: participant_id, block, trial, image_name, posX, posY, category, set, base_name
+write_csv(final_placements_free, "final_placements_free.csv")
 ```
 
-# Save final placements
+# Consistency: both versions
 
 ```{r}
-write_csv(final_placements, "final_placements.csv")
+consistency_grid <- compute_consistency(final_placements_grid) %>%
+  mutate(version = "grid")
+
+consistency_free <- compute_consistency(final_placements_free) %>%
+  mutate(version = "free")
+
+consistency_all <- bind_rows(consistency_grid, consistency_free)
+consistency_all
+```
+
+```{r}
+within_trial_grid <- compute_within_trial(final_placements_grid) %>%
+  mutate(version = "grid")
+
+within_trial_free <- compute_within_trial(final_placements_free) %>%
+  mutate(version = "free")
+
+within_trial_all <- bind_rows(within_trial_grid, within_trial_free)
+within_trial_all
 ```
 
 # Add age and age group
 
 ```{r}
 #| message: false
-# Adjust path if age_sheet.csv lives somewhere other than the project root
 age_df <- read_csv("age_sheet.csv") %>%
   mutate(participant_id = as.character(participant_id))
 
-consistency_results <- consistency_results %>%
+consistency_all <- consistency_all %>%
   left_join(age_df, by = "participant_id") %>%
   mutate(
     age_group = case_when(
@@ -252,23 +337,16 @@ consistency_results <- consistency_results %>%
   )
 ```
 
-```{r}
-# Sanity check: any participants without an age?
-consistency_results %>%
-  filter(is.na(age)) %>%
-  distinct(participant_id)
-```
-
 # Summary table
 
 ```{r}
-consistency_summary <- consistency_results %>%
-  group_by(age_group, category) %>%
+consistency_summary <- consistency_all %>%
+  group_by(version, age_group, category) %>%
   summarise(
     mean_consistency = mean(consistency, na.rm = TRUE),
-    sd_consistency   = sd(consistency, na.rm = TRUE),
-    n                = n(),
-    .groups = "drop"
+    sd_consistency   = sd(consistency,   na.rm = TRUE),
+    n                = sum(!is.na(consistency)),
+    .groups          = "drop"
   )
 
 consistency_summary
@@ -277,13 +355,73 @@ consistency_summary
 # Plot
 
 ```{r}
-ggplot(consistency_results,
+ggplot(consistency_all %>% filter(!is.na(age_group)),
        aes(x = age_group, y = consistency, fill = category)) +
   geom_boxplot() +
+  facet_wrap(~ version) +
   theme_minimal() +
   labs(
     x     = "Age Group",
-    y     = "Consistency (Correlation)",
-    title = "Semantic Arrangement Consistency by Age Group"
+    y     = "Consistency (test-retest correlation)",
+    title = "Semantic Arrangement Consistency by Age Group",
+    subtitle = "Grid vs. Free-sort task versions"
   )
+```
+
+```{r}
+cluster_consistency_grid <- compute_cluster_consistency(
+  final_placements_grid,
+  k = 3
+) %>%
+  mutate(version = "grid")
+
+cluster_consistency_grid
+```
+
+```{r}
+# Compute cluster consistency for the grid version, join age, summarise.
+cluster_consistency_grid <- compute_cluster_consistency(
+  final_placements_grid, k = 3
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  mutate(age_group = case_when(
+    age <= 4 ~ "3–4",
+    age <= 6 ~ "5–6",
+    age >= 7 ~ "7–8"
+  ))
+
+cluster_summary_grid <- cluster_consistency_grid %>%
+  group_by(age_group, category) %>%
+  summarise(
+    mean_ari = mean(cluster_consistency, na.rm = TRUE),
+    sd_ari   = sd(cluster_consistency,   na.rm = TRUE),
+    n        = sum(!is.na(cluster_consistency)),
+    .groups  = "drop"
+  )
+
+cluster_summary_grid
+```
+
+```{r}
+# Compute cluster consistency for the free-sort version, join age, summarise.
+cluster_consistency_free <- compute_cluster_consistency(
+  final_placements_free, k = 3
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  mutate(age_group = case_when(
+    age <= 4 ~ "3–4",
+    age <= 6 ~ "5–6",
+    age >= 7 ~ "7–8"
+  ))
+
+cluster_summary_free <- cluster_consistency_free %>%
+  group_by(age_group, category) %>%
+  summarise(
+    mean_ari = mean(cluster_consistency, na.rm = TRUE),
+    sd_ari   = sd(cluster_consistency,   na.rm = TRUE),
+    n        = sum(!is.na(cluster_consistency)),
+    .groups  = "drop"
+  )
+
+cluster_summary_free
 ```
