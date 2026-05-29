@@ -425,3 +425,130 @@ cluster_summary_free <- cluster_consistency_free %>%
 
 cluster_summary_free
 ```
+
+```{r}
+# Predefine sub-categories within each domain.
+subcategories <- tribble(
+  ~base_name,   ~subcategory,
+  # Emotions: valence
+  "happy",      "positive",   "surprise", "positive",
+  "sad",        "negative",   "angry",    "negative",
+  "fearful",    "negative",   "disgust",  "negative",
+  # Animals: rough ecology — adjust to a split that's developmentally meaningful
+  "horse",      "herbivore", "lion",    "carnivore",
+  "wolf",       "carnivore", "squirrel","herbivore",
+  "sheep",      "land_mammal", "fox",     "carnivore",
+  "dolphin",    "aquatic",     "fish",    "aquatic",
+  "peacock",    "bird",        "pigeon",  "bird",
+  "butterfly",  "insect",      "ladybug", "insect",
+  # Plants: 
+  "apple",      "fruit",   "blueberry", "fruit",
+  "cherry",     "fruit",   "peanut",    "nut",
+  "broccoli",   "vegetable",   "cabbage",   "vegetable",
+  "tree",       "nature","flower",    "nature",
+  "grass",      "nature","leaf",      "nature",
+  "acorn",      "nut","cactus",    "nature"
+)
+
+compute_cat_org <- function(final_placements, subcategories) {
+
+  positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    left_join(subcategories, by = "base_name")
+
+  ratio_one_trial <- function(df) {
+    if (n_distinct(df$subcategory) < 2) return(NA_real_)
+    d <- as.matrix(dist(as.matrix(df %>% select(posX, posY))))
+    same <- outer(df$subcategory, df$subcategory, "==")
+    diag(same) <- NA
+    within  <- mean(d[same == TRUE],  na.rm = TRUE)
+    between <- mean(d[same == FALSE], na.rm = TRUE)
+    between / within
+  }
+
+  positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(cat_org = map_dbl(data, ratio_one_trial)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop")
+}
+```
+
+```{r}
+cat_org_grid_collapsed <- compute_cat_org(final_placements_grid, subcategories) %>%
+  group_by(participant_id) %>%
+  summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop") %>%
+  left_join(age_df, by = "participant_id") %>%
+  mutate(age_group = case_when(
+    age <= 4 ~ "3–4",
+    age <= 6 ~ "5–6",
+    age >= 7 ~ "7–8"
+  ))
+
+cat_org_grid_collapsed %>%
+  group_by(age_group) %>%
+  summarise(
+    mean_ratio = mean(cat_org, na.rm = TRUE),
+    sd_ratio   = sd(cat_org,   na.rm = TRUE),
+    n          = sum(!is.na(cat_org)),
+    .groups    = "drop"
+  )
+```
+
+```{r}
+cat_org_free <- compute_cat_org(final_placements_free, subcategories) %>%
+  left_join(age_df, by = "participant_id") %>%
+  mutate(age_group = case_when(age <= 4 ~ "3–4", age <= 6 ~ "5–6", age >= 7 ~ "7–8"))
+
+cat_org_free %>%
+  group_by(age_group, category) %>%
+  summarise(mean_ratio = mean(cat_org, na.rm = TRUE),
+            sd_ratio   = sd(cat_org,   na.rm = TRUE),
+            n          = sum(!is.na(cat_org)),
+            .groups    = "drop")
+```
+
+```{r}
+all_measures_grid <- compute_consistency(final_placements_grid) %>%
+  rename(distance = consistency) %>%
+  left_join(
+    compute_cluster_consistency(final_placements_grid, k = 3) %>%
+      rename(ari = cluster_consistency) %>%
+      select(participant_id, category, ari),
+    by = c("participant_id", "category")
+  ) %>%
+  left_join(
+    compute_cat_org(final_placements_grid, subcategories) %>%
+      rename(ratio = cat_org),
+    by = c("participant_id", "category")
+  ) %>%
+  group_by(participant_id) %>%
+  summarise(
+    distance = mean(distance, na.rm = TRUE),
+    ari      = mean(ari,      na.rm = TRUE),
+    ratio    = mean(ratio,    na.rm = TRUE),
+    .groups  = "drop"
+  ) %>%
+  left_join(age_df, by = "participant_id") %>%
+  mutate(age_group = case_when(
+    age <= 4 ~ "3–4",
+    age <= 6 ~ "5–6",
+    age >= 7 ~ "7–8"
+  ))
+
+all_measures_grid %>%
+  group_by(age_group) %>%
+  summarise(
+    n              = sum(!is.na(distance)),
+    mean_distance  = mean(distance, na.rm = TRUE),
+    sd_distance    = sd(distance,   na.rm = TRUE),
+    mean_ari       = mean(ari,      na.rm = TRUE),
+    sd_ari         = sd(ari,        na.rm = TRUE),
+    mean_ratio     = mean(ratio,    na.rm = TRUE),
+    sd_ratio       = sd(ratio,      na.rm = TRUE),
+    .groups        = "drop"
+  )
+```
