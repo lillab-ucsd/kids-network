@@ -429,7 +429,7 @@ subcategories <- tribble(
   "happy",      "positive",   "surprise", "positive",
   "sad",        "negative",   "angry",    "negative",
   "fearful",    "negative",   "disgust",  "negative",
-  # Animals: rough ecology — adjust to a split that's developmentally meaningful
+  # Animals: 
   "horse",      "herbivore", "lion",    "carnivore",
   "wolf",       "carnivore", "squirrel","herbivore",
   "sheep",      "herbivore", "fox",     "carnivore",
