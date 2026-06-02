@@ -14,6 +14,7 @@ library(jsonlite)
 library(here)
 library(mclust)
 library(broom)
+library(here)
 
 # Avoid masking by plyr/etc.
 suppressMessages({
@@ -26,7 +27,7 @@ suppressMessages({
 })
 
 # Base data path
-base_path <- "/Users/apple/Desktop/UCSD/kids-network/exp0/data"
+base_path <- here("..","data")
 ```
 
 # Shared helpers
