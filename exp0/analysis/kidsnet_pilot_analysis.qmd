@@ -15,6 +15,8 @@ library(here)
 library(mclust)
 library(broom)
 library(here)
+library(lme4)
+library(lmerTest)
 
 # Avoid masking by plyr/etc.
 suppressMessages({
@@ -342,7 +344,7 @@ consistency_all <- consistency_all %>%
 # Summary table
 
 ```{r}
-consistency_summary <- consistency_all %>%
+consistency_summary_by_category_age <- consistency_all %>%
   group_by(version, age_group, category) %>%
   summarise(
     mean_consistency = mean(consistency, na.rm = TRUE),
@@ -351,7 +353,25 @@ consistency_summary <- consistency_all %>%
     .groups          = "drop"
   )
 
+consistency_summary_by_category_age
+
+consistency_summary <- consistency_all %>%
+  group_by(category) %>%
+  summarise(
+    mean_consistency = mean(consistency, na.rm = TRUE),
+    sd_consistency   = sd(consistency,   na.rm = TRUE),
+    n                = sum(!is.na(consistency)),
+    # compute 95% CI
+    ci_consistency = qt(0.975, n-1)*sd_consistency/sqrt(n),
+    lower_ci = mean_consistency - ci_consistency,
+    upper_ci = mean_consistency + ci_consistency
+  )
+
 consistency_summary
+
+#age model
+m <- lmerTest::lmer(consistency ~ age+(1|participant_id), data = consistency_all)
+summary(m)
 ```
 
 # Plot

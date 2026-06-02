@@ -110,19 +110,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(mclust)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here)</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Avoid masking by plyr/etc.</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressMessages</span>({</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(conflicted)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">conflicts_prefer</span>(</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span>filter, dplyr<span class="sc">::</span>select, dplyr<span class="sc">::</span>mutate, dplyr<span class="sc">::</span>summarise,</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span>count, dplyr<span class="sc">::</span>arrange, dplyr<span class="sc">::</span>slice, dplyr<span class="sc">::</span>rename, purrr<span class="sc">::</span>map,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">.quiet =</span> <span class="cn">TRUE</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Base data path</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>base_path <span class="ot">&lt;-</span> <span class="fu">here</span>(<span class="st">".."</span>,<span class="st">"data"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmerTest)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Avoid masking by plyr/etc.</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressMessages</span>({</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(conflicted)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">conflicts_prefer</span>(</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span>filter, dplyr<span class="sc">::</span>select, dplyr<span class="sc">::</span>mutate, dplyr<span class="sc">::</span>summarise,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span>count, dplyr<span class="sc">::</span>arrange, dplyr<span class="sc">::</span>slice, dplyr<span class="sc">::</span>rename, purrr<span class="sc">::</span>map,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">.quiet =</span> <span class="cn">TRUE</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Base data path</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>base_path <span class="ot">&lt;-</span> <span class="fu">here</span>(<span class="st">".."</span>,<span class="st">"data"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="shared-helpers" class="level1">
@@ -470,7 +472,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="summary-table" class="level1">
 <h1>Summary table</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>consistency_summary <span class="ot">&lt;-</span> consistency_all <span class="sc">%&gt;%</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>consistency_summary_by_category_age <span class="ot">&lt;-</span> consistency_all <span class="sc">%&gt;%</span></span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(version, age_group, category) <span class="sc">%&gt;%</span></span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
 <span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_consistency =</span> <span class="fu">mean</span>(consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -479,46 +481,93 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups          =</span> <span class="st">"drop"</span></span>
 <span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>consistency_summary</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>consistency_summary_by_category_age</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 18 × 6
+<pre><code># A tibble: 21 × 6
    version age_group category mean_consistency sd_consistency     n
    &lt;chr&gt;   &lt;chr&gt;     &lt;chr&gt;               &lt;dbl&gt;          &lt;dbl&gt; &lt;int&gt;
- 1 free    3–4       animals           -0.137         NA          1
- 2 free    3–4       emotions           0.388         NA          1
- 3 free    3–4       plants            -0.0327        NA          1
- 4 free    5–6       animals            0.300          0.566      3
- 5 free    5–6       emotions           0.260          0.779      3
- 6 free    5–6       plants             0.373          0.513      3
- 7 free    7–8       animals            0.212          0.190      2
- 8 free    7–8       emotions           0.335          0.535      2
- 9 free    7–8       plants             0.447          0.347      2
-10 grid    3–4       animals           -0.0297         0.131      9
-11 grid    3–4       emotions           0.0720         0.289      9
-12 grid    3–4       plants             0.0398         0.0887     9
-13 grid    5–6       animals            0.216          0.372     14
-14 grid    5–6       emotions           0.174          0.418     14
-15 grid    5–6       plants             0.260          0.287     14
-16 grid    7–8       animals            0.171          0.275      9
-17 grid    7–8       emotions           0.206          0.318      9
-18 grid    7–8       plants             0.218          0.159      9</code></pre>
+ 1 free    5–6       animals           -0.0591         0.127      3
+ 2 free    5–6       emotions           0.0847         0.595      3
+ 3 free    5–6       plants             0.0404         0.0730     3
+ 4 free    7–8       animals            0.212          0.190      2
+ 5 free    7–8       emotions           0.335          0.535      2
+ 6 free    7–8       plants             0.447          0.347      2
+ 7 free    &lt;NA&gt;      animals            0.942         NA          1
+ 8 free    &lt;NA&gt;      emotions           0.915         NA          1
+ 9 free    &lt;NA&gt;      plants             0.964         NA          1
+10 grid    3–4       animals           -0.119         NA          1
+# ℹ 11 more rows</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>consistency_summary <span class="ot">&lt;-</span> consistency_all <span class="sc">%&gt;%</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(category) <span class="sc">%&gt;%</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_consistency =</span> <span class="fu">mean</span>(consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_consistency   =</span> <span class="fu">sd</span>(consistency,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">n                =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(consistency)),</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># compute 95% CI</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">ci_consistency =</span> <span class="fu">qt</span>(<span class="fl">0.975</span>, n<span class="dv">-1</span>)<span class="sc">*</span>sd_consistency<span class="sc">/</span><span class="fu">sqrt</span>(n),</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">lower_ci =</span> mean_consistency <span class="sc">-</span> ci_consistency,</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">upper_ci =</span> mean_consistency <span class="sc">+</span> ci_consistency</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>consistency_summary</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 3 × 7
+  category mean_consistency sd_consistency     n ci_consistency lower_ci
+  &lt;chr&gt;               &lt;dbl&gt;          &lt;dbl&gt; &lt;int&gt;          &lt;dbl&gt;    &lt;dbl&gt;
+1 animals             0.144          0.318    38         0.104    0.0399
+2 emotions            0.179          0.385    38         0.126    0.0521
+3 plants              0.209          0.262    38         0.0860   0.123 
+# ℹ 1 more variable: upper_ci &lt;dbl&gt;</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">#age model</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>m <span class="ot">&lt;-</span> lmerTest<span class="sc">::</span><span class="fu">lmer</span>(consistency <span class="sc">~</span> age<span class="sc">+</span>(<span class="dv">1</span><span class="sc">|</span>participant_id), <span class="at">data =</span> consistency_all)</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+lmerModLmerTest]
+Formula: consistency ~ age + (1 | participant_id)
+   Data: consistency_all
+
+REML criterion at convergence: 59.4
+
+Scaled residuals: 
+     Min       1Q   Median       3Q      Max 
+-2.16659 -0.62745  0.06331  0.48341  2.10792 
+
+Random effects:
+ Groups         Name        Variance Std.Dev.
+ participant_id (Intercept) 0.02631  0.1622  
+ Residual                   0.07174  0.2678  
+Number of obs: 114, groups:  participant_id, 38
+
+Fixed effects:
+            Estimate Std. Error       df t value Pr(&gt;|t|)  
+(Intercept) -0.25052    0.17478 36.00000  -1.433    0.160  
+age          0.07107    0.02840 36.00000   2.502    0.017 *
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Correlation of Fixed Effects:
+    (Intr)
+age -0.978</code></pre>
 </div>
 </div>
 </section>
 <section id="plot" class="level1">
 <h1>Plot</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(consistency_all <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age_group)),</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>       <span class="fu">aes</span>(<span class="at">x =</span> age_group, <span class="at">y =</span> consistency, <span class="at">fill =</span> category)) <span class="sc">+</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> version) <span class="sc">+</span></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">x     =</span> <span class="st">"Age Group"</span>,</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">y     =</span> <span class="st">"Consistency (test-retest correlation)"</span>,</span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Semantic Arrangement Consistency by Age Group"</span>,</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Grid vs. Free-sort task versions"</span></span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(consistency_all <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age_group)),</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>       <span class="fu">aes</span>(<span class="at">x =</span> age_group, <span class="at">y =</span> consistency, <span class="at">fill =</span> category)) <span class="sc">+</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> version) <span class="sc">+</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">x     =</span> <span class="st">"Age Group"</span>,</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">y     =</span> <span class="st">"Consistency (test-retest correlation)"</span>,</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Semantic Arrangement Consistency by Age Group"</span>,</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Grid vs. Free-sort task versions"</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -531,273 +580,278 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="cluster-based-consistency" class="level1">
 <h1>Cluster-based Consistency</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute cluster consistency for the grid version, join age, summarise.</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>cluster_consistency_grid <span class="ot">&lt;-</span> <span class="fu">compute_cluster_consistency</span>(</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  final_placements_grid, <span class="at">k =</span> <span class="dv">3</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>cluster_summary_grid <span class="ot">&lt;-</span> cluster_consistency_grid <span class="sc">%&gt;%</span></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari =</span> <span class="fu">mean</span>(cluster_consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari   =</span> <span class="fu">sd</span>(cluster_consistency,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n        =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cluster_consistency)),</span>
-<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
-<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>cluster_summary_grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute cluster consistency for the grid version, join age, summarise.</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>cluster_consistency_grid <span class="ot">&lt;-</span> <span class="fu">compute_cluster_consistency</span>(</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  final_placements_grid, <span class="at">k =</span> <span class="dv">3</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>cluster_summary_grid <span class="ot">&lt;-</span> cluster_consistency_grid <span class="sc">%&gt;%</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari =</span> <span class="fu">mean</span>(cluster_consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari   =</span> <span class="fu">sd</span>(cluster_consistency,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n        =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cluster_consistency)),</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>cluster_summary_grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 9 × 5
-  age_group category mean_ari sd_ari     n
-  &lt;chr&gt;     &lt;chr&gt;       &lt;dbl&gt;  &lt;dbl&gt; &lt;int&gt;
-1 3–4       animals    0.0233 0.0945     9
-2 3–4       emotions   0.0770 0.237      9
-3 3–4       plants     0.0388 0.173      9
-4 5–6       animals    0.249  0.380     14
-5 5–6       emotions  -0.0742 0.241     14
-6 5–6       plants     0.276  0.378     14
-7 7–8       animals    0.194  0.198      9
-8 7–8       emotions   0.137  0.420      9
-9 7–8       plants     0.177  0.309      9</code></pre>
+<pre><code># A tibble: 12 × 5
+   age_group category mean_ari sd_ari     n
+   &lt;chr&gt;     &lt;chr&gt;       &lt;dbl&gt;  &lt;dbl&gt; &lt;int&gt;
+ 1 3–4       animals   -0.109  NA         1
+ 2 3–4       emotions  -0.296  NA         1
+ 3 3–4       plants    -0.0941 NA         1
+ 4 5–6       animals    0.134   0.268    17
+ 5 5–6       emotions   0.0314  0.241    17
+ 6 5–6       plants     0.124   0.261    17
+ 7 7–8       animals    0.194   0.198     9
+ 8 7–8       emotions   0.137   0.420     9
+ 9 7–8       plants     0.177   0.309     9
+10 &lt;NA&gt;      animals    0.304   0.471     5
+11 &lt;NA&gt;      emotions  -0.117   0.242     5
+12 &lt;NA&gt;      plants     0.439   0.461     5</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute cluster consistency for the free-sort version, join age, summarise.</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>cluster_consistency_free <span class="ot">&lt;-</span> <span class="fu">compute_cluster_consistency</span>(</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  final_placements_free, <span class="at">k =</span> <span class="dv">3</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>cluster_summary_free <span class="ot">&lt;-</span> cluster_consistency_free <span class="sc">%&gt;%</span></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari =</span> <span class="fu">mean</span>(cluster_consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari   =</span> <span class="fu">sd</span>(cluster_consistency,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n        =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cluster_consistency)),</span>
-<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
-<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>cluster_summary_free</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute cluster consistency for the free-sort version, join age, summarise.</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>cluster_consistency_free <span class="ot">&lt;-</span> <span class="fu">compute_cluster_consistency</span>(</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  final_placements_free, <span class="at">k =</span> <span class="dv">3</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>cluster_summary_free <span class="ot">&lt;-</span> cluster_consistency_free <span class="sc">%&gt;%</span></span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari =</span> <span class="fu">mean</span>(cluster_consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari   =</span> <span class="fu">sd</span>(cluster_consistency,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n        =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cluster_consistency)),</span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
+<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>cluster_summary_free</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 9 × 5
   age_group category mean_ari sd_ari     n
   &lt;chr&gt;     &lt;chr&gt;       &lt;dbl&gt;  &lt;dbl&gt; &lt;int&gt;
-1 3–4       animals   -0.164  NA         1
-2 3–4       emotions   0.0741 NA         1
-3 3–4       plants     0.137  NA         1
-4 5–6       animals    0.116   0.247     3
-5 5–6       emotions   0.251   0.692     3
-6 5–6       plants     0.256   0.646     3
-7 7–8       animals    0.226   0.222     2
-8 7–8       emotions   0.0241  0.548     2
-9 7–8       plants     0.304   0.232     2</code></pre>
+1 5–6       animals   -0.0679  0.111     3
+2 5–6       emotions  -0.0573  0.266     3
+3 5–6       plants    -0.0321  0.154     3
+4 7–8       animals    0.226   0.222     2
+5 7–8       emotions   0.0241  0.548     2
+6 7–8       plants     0.304   0.232     2
+7 &lt;NA&gt;      animals    0.389  NA         1
+8 &lt;NA&gt;      emotions   1      NA         1
+9 &lt;NA&gt;      plants     1      NA         1</code></pre>
 </div>
 </div>
 </section>
 <section id="compare-to-predefined-sub-categories" class="level1">
 <h1>Compare to predefined sub-categories</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predefine sub-categories within each domain.</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>subcategories <span class="ot">&lt;-</span> <span class="fu">tribble</span>(</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="sc">~</span>base_name,   <span class="sc">~</span>subcategory,</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Emotions: valence</span></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"happy"</span>,      <span class="st">"positive"</span>,   <span class="st">"surprise"</span>, <span class="st">"positive"</span>,</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"sad"</span>,        <span class="st">"negative"</span>,   <span class="st">"angry"</span>,    <span class="st">"negative"</span>,</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"fearful"</span>,    <span class="st">"negative"</span>,   <span class="st">"disgust"</span>,  <span class="st">"negative"</span>,</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Animals: </span></span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"horse"</span>,      <span class="st">"herbivore"</span>, <span class="st">"lion"</span>,    <span class="st">"carnivore"</span>,</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"wolf"</span>,       <span class="st">"carnivore"</span>, <span class="st">"squirrel"</span>,<span class="st">"herbivore"</span>,</span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"sheep"</span>,      <span class="st">"herbivore"</span>, <span class="st">"fox"</span>,     <span class="st">"carnivore"</span>,</span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>  <span class="st">"dolphin"</span>,    <span class="st">"aquatic"</span>,     <span class="st">"fish"</span>,    <span class="st">"aquatic"</span>,</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">"peacock"</span>,    <span class="st">"bird"</span>,        <span class="st">"pigeon"</span>,  <span class="st">"bird"</span>,</span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">"butterfly"</span>,  <span class="st">"insect"</span>,      <span class="st">"ladybug"</span>, <span class="st">"insect"</span>,</span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Plants: </span></span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"apple"</span>,      <span class="st">"fruit"</span>,   <span class="st">"blueberry"</span>, <span class="st">"fruit"</span>,</span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>  <span class="st">"cherry"</span>,     <span class="st">"fruit"</span>,   <span class="st">"peanut"</span>,    <span class="st">"nut"</span>,</span>
-<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"broccoli"</span>,   <span class="st">"vegetable"</span>,   <span class="st">"cabbage"</span>,   <span class="st">"vegetable"</span>,</span>
-<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>  <span class="st">"tree"</span>,       <span class="st">"nature"</span>,<span class="st">"flower"</span>,    <span class="st">"nature"</span>,</span>
-<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>  <span class="st">"grass"</span>,      <span class="st">"nature"</span>,<span class="st">"leaf"</span>,      <span class="st">"nature"</span>,</span>
-<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">"acorn"</span>,      <span class="st">"nut"</span>,<span class="st">"cactus"</span>,    <span class="st">"nature"</span></span>
-<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>compute_cat_org <span class="ot">&lt;-</span> <span class="cf">function</span>(final_placements, subcategories) {</span>
-<span id="cb29-25"><a href="#cb29-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-26"><a href="#cb29-26" aria-hidden="true" tabindex="-1"></a>  positions <span class="ot">&lt;-</span> final_placements <span class="sc">%&gt;%</span></span>
-<span id="cb29-27"><a href="#cb29-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category, trial, base_name) <span class="sc">%&gt;%</span></span>
-<span id="cb29-28"><a href="#cb29-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">posX =</span> <span class="fu">mean</span>(posX), <span class="at">posY =</span> <span class="fu">mean</span>(posY), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb29-29"><a href="#cb29-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">left_join</span>(subcategories, <span class="at">by =</span> <span class="st">"base_name"</span>)</span>
-<span id="cb29-30"><a href="#cb29-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-31"><a href="#cb29-31" aria-hidden="true" tabindex="-1"></a>  ratio_one_trial <span class="ot">&lt;-</span> <span class="cf">function</span>(df) {</span>
-<span id="cb29-32"><a href="#cb29-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">n_distinct</span>(df<span class="sc">$</span>subcategory) <span class="sc">&lt;</span> <span class="dv">2</span>) <span class="fu">return</span>(<span class="cn">NA_real_</span>)</span>
-<span id="cb29-33"><a href="#cb29-33" aria-hidden="true" tabindex="-1"></a>    d <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">dist</span>(<span class="fu">as.matrix</span>(df <span class="sc">%&gt;%</span> <span class="fu">select</span>(posX, posY))))</span>
-<span id="cb29-34"><a href="#cb29-34" aria-hidden="true" tabindex="-1"></a>    same <span class="ot">&lt;-</span> <span class="fu">outer</span>(df<span class="sc">$</span>subcategory, df<span class="sc">$</span>subcategory, <span class="st">"=="</span>)</span>
-<span id="cb29-35"><a href="#cb29-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">diag</span>(same) <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
-<span id="cb29-36"><a href="#cb29-36" aria-hidden="true" tabindex="-1"></a>    within  <span class="ot">&lt;-</span> <span class="fu">mean</span>(d[same <span class="sc">==</span> <span class="cn">TRUE</span>],  <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb29-37"><a href="#cb29-37" aria-hidden="true" tabindex="-1"></a>    between <span class="ot">&lt;-</span> <span class="fu">mean</span>(d[same <span class="sc">==</span> <span class="cn">FALSE</span>], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb29-38"><a href="#cb29-38" aria-hidden="true" tabindex="-1"></a>    between <span class="sc">/</span> within</span>
-<span id="cb29-39"><a href="#cb29-39" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb29-40"><a href="#cb29-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-41"><a href="#cb29-41" aria-hidden="true" tabindex="-1"></a>  positions <span class="sc">%&gt;%</span></span>
-<span id="cb29-42"><a href="#cb29-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category, trial) <span class="sc">%&gt;%</span></span>
-<span id="cb29-43"><a href="#cb29-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">nest</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb29-44"><a href="#cb29-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">cat_org =</span> <span class="fu">map_dbl</span>(data, ratio_one_trial)) <span class="sc">%&gt;%</span></span>
-<span id="cb29-45"><a href="#cb29-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(<span class="sc">-</span>data) <span class="sc">%&gt;%</span></span>
-<span id="cb29-46"><a href="#cb29-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category) <span class="sc">%&gt;%</span></span>
-<span id="cb29-47"><a href="#cb29-47" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">cat_org =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb29-48"><a href="#cb29-48" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predefine sub-categories within each domain.</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>subcategories <span class="ot">&lt;-</span> <span class="fu">tribble</span>(</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  <span class="sc">~</span>base_name,   <span class="sc">~</span>subcategory,</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Emotions: valence</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"happy"</span>,      <span class="st">"positive"</span>,   <span class="st">"surprise"</span>, <span class="st">"positive"</span>,</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"sad"</span>,        <span class="st">"negative"</span>,   <span class="st">"angry"</span>,    <span class="st">"negative"</span>,</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"fearful"</span>,    <span class="st">"negative"</span>,   <span class="st">"disgust"</span>,  <span class="st">"negative"</span>,</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Animals: </span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"horse"</span>,      <span class="st">"herbivore"</span>, <span class="st">"lion"</span>,    <span class="st">"carnivore"</span>,</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"wolf"</span>,       <span class="st">"carnivore"</span>, <span class="st">"squirrel"</span>,<span class="st">"herbivore"</span>,</span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"sheep"</span>,      <span class="st">"herbivore"</span>, <span class="st">"fox"</span>,     <span class="st">"carnivore"</span>,</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>  <span class="st">"dolphin"</span>,    <span class="st">"aquatic"</span>,     <span class="st">"fish"</span>,    <span class="st">"aquatic"</span>,</span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">"peacock"</span>,    <span class="st">"bird"</span>,        <span class="st">"pigeon"</span>,  <span class="st">"bird"</span>,</span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">"butterfly"</span>,  <span class="st">"insect"</span>,      <span class="st">"ladybug"</span>, <span class="st">"insect"</span>,</span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Plants: </span></span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"apple"</span>,      <span class="st">"fruit"</span>,   <span class="st">"blueberry"</span>, <span class="st">"fruit"</span>,</span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>  <span class="st">"cherry"</span>,     <span class="st">"fruit"</span>,   <span class="st">"peanut"</span>,    <span class="st">"nut"</span>,</span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"broccoli"</span>,   <span class="st">"vegetable"</span>,   <span class="st">"cabbage"</span>,   <span class="st">"vegetable"</span>,</span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a>  <span class="st">"tree"</span>,       <span class="st">"nature"</span>,<span class="st">"flower"</span>,    <span class="st">"nature"</span>,</span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a>  <span class="st">"grass"</span>,      <span class="st">"nature"</span>,<span class="st">"leaf"</span>,      <span class="st">"nature"</span>,</span>
+<span id="cb33-21"><a href="#cb33-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">"acorn"</span>,      <span class="st">"nut"</span>,<span class="st">"cactus"</span>,    <span class="st">"nature"</span></span>
+<span id="cb33-22"><a href="#cb33-22" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb33-23"><a href="#cb33-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-24"><a href="#cb33-24" aria-hidden="true" tabindex="-1"></a>compute_cat_org <span class="ot">&lt;-</span> <span class="cf">function</span>(final_placements, subcategories) {</span>
+<span id="cb33-25"><a href="#cb33-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-26"><a href="#cb33-26" aria-hidden="true" tabindex="-1"></a>  positions <span class="ot">&lt;-</span> final_placements <span class="sc">%&gt;%</span></span>
+<span id="cb33-27"><a href="#cb33-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category, trial, base_name) <span class="sc">%&gt;%</span></span>
+<span id="cb33-28"><a href="#cb33-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">posX =</span> <span class="fu">mean</span>(posX), <span class="at">posY =</span> <span class="fu">mean</span>(posY), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb33-29"><a href="#cb33-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">left_join</span>(subcategories, <span class="at">by =</span> <span class="st">"base_name"</span>)</span>
+<span id="cb33-30"><a href="#cb33-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-31"><a href="#cb33-31" aria-hidden="true" tabindex="-1"></a>  ratio_one_trial <span class="ot">&lt;-</span> <span class="cf">function</span>(df) {</span>
+<span id="cb33-32"><a href="#cb33-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">n_distinct</span>(df<span class="sc">$</span>subcategory) <span class="sc">&lt;</span> <span class="dv">2</span>) <span class="fu">return</span>(<span class="cn">NA_real_</span>)</span>
+<span id="cb33-33"><a href="#cb33-33" aria-hidden="true" tabindex="-1"></a>    d <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">dist</span>(<span class="fu">as.matrix</span>(df <span class="sc">%&gt;%</span> <span class="fu">select</span>(posX, posY))))</span>
+<span id="cb33-34"><a href="#cb33-34" aria-hidden="true" tabindex="-1"></a>    same <span class="ot">&lt;-</span> <span class="fu">outer</span>(df<span class="sc">$</span>subcategory, df<span class="sc">$</span>subcategory, <span class="st">"=="</span>)</span>
+<span id="cb33-35"><a href="#cb33-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">diag</span>(same) <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb33-36"><a href="#cb33-36" aria-hidden="true" tabindex="-1"></a>    within  <span class="ot">&lt;-</span> <span class="fu">mean</span>(d[same <span class="sc">==</span> <span class="cn">TRUE</span>],  <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb33-37"><a href="#cb33-37" aria-hidden="true" tabindex="-1"></a>    between <span class="ot">&lt;-</span> <span class="fu">mean</span>(d[same <span class="sc">==</span> <span class="cn">FALSE</span>], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb33-38"><a href="#cb33-38" aria-hidden="true" tabindex="-1"></a>    between <span class="sc">/</span> within</span>
+<span id="cb33-39"><a href="#cb33-39" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb33-40"><a href="#cb33-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-41"><a href="#cb33-41" aria-hidden="true" tabindex="-1"></a>  positions <span class="sc">%&gt;%</span></span>
+<span id="cb33-42"><a href="#cb33-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category, trial) <span class="sc">%&gt;%</span></span>
+<span id="cb33-43"><a href="#cb33-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">nest</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb33-44"><a href="#cb33-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">cat_org =</span> <span class="fu">map_dbl</span>(data, ratio_one_trial)) <span class="sc">%&gt;%</span></span>
+<span id="cb33-45"><a href="#cb33-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(<span class="sc">-</span>data) <span class="sc">%&gt;%</span></span>
+<span id="cb33-46"><a href="#cb33-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(participant_id, category) <span class="sc">%&gt;%</span></span>
+<span id="cb33-47"><a href="#cb33-47" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">cat_org =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb33-48"><a href="#cb33-48" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio for grid version</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>cat_org_grid_collapsed <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id) <span class="sc">%&gt;%</span></span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">cat_org =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
-<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
-<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
-<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
-<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
-<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>cat_org_grid_collapsed <span class="sc">%&gt;%</span></span>
-<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">%&gt;%</span></span>
-<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ratio =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ratio   =</span> <span class="fu">sd</span>(cat_org,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n          =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cat_org)),</span>
-<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups    =</span> <span class="st">"drop"</span></span>
-<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio for grid version</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>cat_org_grid_collapsed <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id) <span class="sc">%&gt;%</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">cat_org =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>cat_org_grid_collapsed <span class="sc">%&gt;%</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">%&gt;%</span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ratio =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ratio   =</span> <span class="fu">sd</span>(cat_org,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">n          =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cat_org)),</span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups    =</span> <span class="st">"drop"</span></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 4
+<pre><code># A tibble: 4 × 4
   age_group mean_ratio sd_ratio     n
   &lt;chr&gt;          &lt;dbl&gt;    &lt;dbl&gt; &lt;int&gt;
-1 3–4             1.02   0.0856     9
-2 5–6             1.58   0.464     14
-3 7–8             1.52   0.422      9</code></pre>
+1 3–4             1.14   NA         1
+2 5–6             1.31    0.447    17
+3 7–8             1.52    0.422     9
+4 &lt;NA&gt;            1.57    0.519     5</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio for free sorting version</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>cat_org_free <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_free, subcategories) <span class="sc">%&gt;%</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>, age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>, age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span>))</span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>cat_org_free <span class="sc">%&gt;%</span></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_ratio =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">sd_ratio   =</span> <span class="fu">sd</span>(cat_org,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">n          =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cat_org)),</span>
-<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups    =</span> <span class="st">"drop"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio for free sorting version</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>cat_org_free <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_free, subcategories) <span class="sc">%&gt;%</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>, age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>, age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span>))</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>cat_org_free <span class="sc">%&gt;%</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group, category) <span class="sc">%&gt;%</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_ratio =</span> <span class="fu">mean</span>(cat_org, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">sd_ratio   =</span> <span class="fu">sd</span>(cat_org,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">n          =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(cat_org)),</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups    =</span> <span class="st">"drop"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 9 × 5
   age_group category mean_ratio sd_ratio     n
   &lt;chr&gt;     &lt;chr&gt;         &lt;dbl&gt;    &lt;dbl&gt; &lt;int&gt;
-1 3–4       animals       0.933   NA         1
-2 3–4       emotions      0.950   NA         1
-3 3–4       plants        0.819   NA         1
-4 5–6       animals       1.35     0.659     3
-5 5–6       emotions      1.11     0.173     3
-6 5–6       plants        2.63     2.96      3
-7 7–8       animals       2.25     0.917     2
-8 7–8       emotions      1.12     0.320     2
-9 7–8       plants        2.99     1.03      2</code></pre>
+1 5–6       animals       0.964   0.118      3
+2 5–6       emotions      1.10    0.189      3
+3 5–6       plants        0.887   0.0600     3
+4 7–8       animals       2.25    0.917      2
+5 7–8       emotions      1.12    0.320      2
+6 7–8       plants        2.99    1.03       2
+7 &lt;NA&gt;      animals       2.10   NA          1
+8 &lt;NA&gt;      emotions      0.995  NA          1
+9 &lt;NA&gt;      plants        6.04   NA          1</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co">#summary table</span></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>all_measures_grid <span class="ot">&lt;-</span> <span class="fu">compute_consistency</span>(final_placements_grid) <span class="sc">%&gt;%</span></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">distance =</span> consistency) <span class="sc">%&gt;%</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">compute_cluster_consistency</span>(final_placements_grid, <span class="at">k =</span> <span class="dv">3</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename</span>(<span class="at">ari =</span> cluster_consistency) <span class="sc">%&gt;%</span></span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(participant_id, category, ari),</span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"participant_id"</span>, <span class="st">"category"</span>)</span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
-<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename</span>(<span class="at">ratio =</span> cat_org),</span>
-<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"participant_id"</span>, <span class="st">"category"</span>)</span>
-<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id) <span class="sc">%&gt;%</span></span>
-<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">distance =</span> <span class="fu">mean</span>(distance, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">ari      =</span> <span class="fu">mean</span>(ari,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">ratio    =</span> <span class="fu">mean</span>(ratio,    <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
-<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
-<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
-<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
-<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
-<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a>  ))</span>
-<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>all_measures_grid <span class="sc">%&gt;%</span></span>
-<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">%&gt;%</span></span>
-<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">n              =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(distance)),</span>
-<span id="cb34-33"><a href="#cb34-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_distance  =</span> <span class="fu">mean</span>(distance, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_distance    =</span> <span class="fu">sd</span>(distance,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari       =</span> <span class="fu">mean</span>(ari,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-36"><a href="#cb34-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari         =</span> <span class="fu">sd</span>(ari,        <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-37"><a href="#cb34-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ratio     =</span> <span class="fu">mean</span>(ratio,    <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-38"><a href="#cb34-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ratio       =</span> <span class="fu">sd</span>(ratio,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb34-39"><a href="#cb34-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups        =</span> <span class="st">"drop"</span></span>
-<span id="cb34-40"><a href="#cb34-40" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co">#summary table</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>all_measures_grid <span class="ot">&lt;-</span> <span class="fu">compute_consistency</span>(final_placements_grid) <span class="sc">%&gt;%</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">distance =</span> consistency) <span class="sc">%&gt;%</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">compute_cluster_consistency</span>(final_placements_grid, <span class="at">k =</span> <span class="dv">3</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename</span>(<span class="at">ari =</span> cluster_consistency) <span class="sc">%&gt;%</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(participant_id, category, ari),</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"participant_id"</span>, <span class="st">"category"</span>)</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename</span>(<span class="at">ratio =</span> cat_org),</span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"participant_id"</span>, <span class="st">"category"</span>)</span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id) <span class="sc">%&gt;%</span></span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">distance =</span> <span class="fu">mean</span>(distance, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">ari      =</span> <span class="fu">mean</span>(ari,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">ratio    =</span> <span class="fu">mean</span>(ratio,    <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups  =</span> <span class="st">"drop"</span></span>
+<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb38-23"><a href="#cb38-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
+<span id="cb38-24"><a href="#cb38-24" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">"3–4"</span>,</span>
+<span id="cb38-25"><a href="#cb38-25" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&lt;=</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">"5–6"</span>,</span>
+<span id="cb38-26"><a href="#cb38-26" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">&gt;=</span> <span class="dv">7</span> <span class="sc">~</span> <span class="st">"7–8"</span></span>
+<span id="cb38-27"><a href="#cb38-27" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb38-28"><a href="#cb38-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-29"><a href="#cb38-29" aria-hidden="true" tabindex="-1"></a>all_measures_grid <span class="sc">%&gt;%</span></span>
+<span id="cb38-30"><a href="#cb38-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">%&gt;%</span></span>
+<span id="cb38-31"><a href="#cb38-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb38-32"><a href="#cb38-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">n              =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(distance)),</span>
+<span id="cb38-33"><a href="#cb38-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_distance  =</span> <span class="fu">mean</span>(distance, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-34"><a href="#cb38-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_distance    =</span> <span class="fu">sd</span>(distance,   <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-35"><a href="#cb38-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ari       =</span> <span class="fu">mean</span>(ari,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-36"><a href="#cb38-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ari         =</span> <span class="fu">sd</span>(ari,        <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-37"><a href="#cb38-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_ratio     =</span> <span class="fu">mean</span>(ratio,    <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-38"><a href="#cb38-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ratio       =</span> <span class="fu">sd</span>(ratio,      <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb38-39"><a href="#cb38-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups        =</span> <span class="st">"drop"</span></span>
+<span id="cb38-40"><a href="#cb38-40" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 8
+<pre><code># A tibble: 4 × 8
   age_group     n mean_distance sd_distance mean_ari sd_ari mean_ratio sd_ratio
   &lt;chr&gt;     &lt;int&gt;         &lt;dbl&gt;       &lt;dbl&gt;    &lt;dbl&gt;  &lt;dbl&gt;      &lt;dbl&gt;    &lt;dbl&gt;
-1 3–4           9        0.0274       0.109   0.0464  0.122       1.02   0.0856
-2 5–6          14        0.217        0.268   0.150   0.247       1.58   0.464 
-3 7–8           9        0.198        0.125   0.169   0.167       1.52   0.422 </code></pre>
+1 3–4           1        0.0166      NA      -0.166  NA           1.14   NA    
+2 5–6          17        0.137        0.199   0.0965  0.173       1.31    0.447
+3 7–8           9        0.198        0.125   0.169   0.167       1.52    0.422
+4 &lt;NA&gt;          5        0.187        0.376   0.209   0.301       1.57    0.519</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio vs age correlation</span></span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>ratio_by_age <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age), <span class="sc">!</span><span class="fu">is.na</span>(cat_org)) <span class="sc">%&gt;%</span></span>
-<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(category) <span class="sc">%&gt;%</span></span>
-<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nest</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">model  =</span> <span class="fu">map</span>(data, <span class="sc">~</span> <span class="fu">lm</span>(cat_org <span class="sc">~</span> age, <span class="at">data =</span> .x)),</span>
-<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">tidied =</span> <span class="fu">map</span>(model, broom<span class="sc">::</span>tidy)</span>
-<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(tidied) <span class="sc">%&gt;%</span></span>
-<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(term <span class="sc">==</span> <span class="st">"age"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(category, estimate, std.error, statistic, p.value)</span>
-<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>ratio_by_age</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Between/within sub-category ratio vs age correlation</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>ratio_by_age <span class="ot">&lt;-</span> <span class="fu">compute_cat_org</span>(final_placements_grid, subcategories) <span class="sc">%&gt;%</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age), <span class="sc">!</span><span class="fu">is.na</span>(cat_org)) <span class="sc">%&gt;%</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(category) <span class="sc">%&gt;%</span></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nest</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">model  =</span> <span class="fu">map</span>(data, <span class="sc">~</span> <span class="fu">lm</span>(cat_org <span class="sc">~</span> age, <span class="at">data =</span> .x)),</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">tidied =</span> <span class="fu">map</span>(model, broom<span class="sc">::</span>tidy)</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(tidied) <span class="sc">%&gt;%</span></span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(term <span class="sc">==</span> <span class="st">"age"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(category, estimate, std.error, statistic, p.value)</span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a>ratio_by_age</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 3 × 5
 # Groups:   category [3]
   category estimate std.error statistic p.value
   &lt;chr&gt;       &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;
-1 animals    0.150     0.0774     1.94   0.0620
-2 emotions   0.0569    0.0648     0.877  0.387 
-3 plants     0.147     0.0696     2.11   0.0432</code></pre>
+1 animals    0.174     0.0823      2.12  0.0427
+2 emotions   0.0769    0.0690      1.11  0.274 
+3 plants     0.163     0.0743      2.19  0.0361</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co">#consistency vs age</span></span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>distance_one_number <span class="ot">&lt;-</span> consistency_grid <span class="sc">%&gt;%</span></span>
-<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id, age) <span class="sc">%&gt;%</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">distance =</span> <span class="fu">mean</span>(consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age), <span class="sc">!</span><span class="fu">is.na</span>(distance))</span>
-<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(distance <span class="sc">~</span> age, <span class="at">data =</span> distance_one_number))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co">#consistency vs age</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>distance_one_number <span class="ot">&lt;-</span> consistency_grid <span class="sc">%&gt;%</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(age_df, <span class="at">by =</span> <span class="st">"participant_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(participant_id, age) <span class="sc">%&gt;%</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">distance =</span> <span class="fu">mean</span>(consistency, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(age), <span class="sc">!</span><span class="fu">is.na</span>(distance))</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(distance <span class="sc">~</span> age, <span class="at">data =</span> distance_one_number))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 Call:
@@ -805,32 +859,32 @@ lm(formula = distance ~ age, data = distance_one_number)
 
 Residuals:
      Min       1Q   Median       3Q      Max 
--0.47259 -0.10415 -0.03533  0.09808  0.49797 
+-0.49456 -0.11616 -0.03254  0.11275  0.48146 
 
 Coefficients:
             Estimate Std. Error t value Pr(&gt;|t|)  
-(Intercept) -0.09587    0.14987  -0.640   0.5272  
-age          0.04596    0.02630   1.747   0.0908 .
+(Intercept) -0.16060    0.17224  -0.932    0.359  
+age          0.05302    0.02801   1.893    0.068 .
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-Residual standard error: 0.2037 on 30 degrees of freedom
-Multiple R-squared:  0.09238,   Adjusted R-squared:  0.06212 
-F-statistic: 3.053 on 1 and 30 DF,  p-value: 0.0908</code></pre>
+Residual standard error: 0.2021 on 30 degrees of freedom
+Multiple R-squared:  0.1067,    Adjusted R-squared:  0.07692 
+F-statistic: 3.583 on 1 and 30 DF,  p-value: 0.06805</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="fu">with</span>(distance_one_number, <span class="fu">cor.test</span>(age, distance))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="fu">with</span>(distance_one_number, <span class="fu">cor.test</span>(age, distance))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Pearson's product-moment correlation
 
 data:  age and distance
-t = 1.7474, df = 30, p-value = 0.0908
+t = 1.8929, df = 30, p-value = 0.06805
 alternative hypothesis: true correlation is not equal to 0
 95 percent confidence interval:
- -0.05006181  0.59009294
+ -0.0248840  0.6062832
 sample estimates:
       cor 
-0.3039378 </code></pre>
+0.3266442 </code></pre>
 </div>
 </div>
 </section>
