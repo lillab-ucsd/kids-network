@@ -13,6 +13,7 @@ library(tidyverse)
 library(jsonlite)
 library(here)
 library(mclust)
+library(broom)
 
 # Avoid masking by plyr/etc.
 suppressMessages({
@@ -30,7 +31,7 @@ base_path <- "/Users/apple/Desktop/UCSD/kids-network/exp0/data"
 
 # Shared helpers
 
-Two versions (grid, free-sort) share the same downstream logic — only the position-field names differ. Helpers go here so each version stays short.
+Two versions (grid, free-sort) share the same downstream logic — only the position-field names differ.
 
 ```{r}
 #Extract final placement positions from grid version
@@ -368,15 +369,7 @@ ggplot(consistency_all %>% filter(!is.na(age_group)),
   )
 ```
 
-```{r}
-cluster_consistency_grid <- compute_cluster_consistency(
-  final_placements_grid,
-  k = 3
-) %>%
-  mutate(version = "grid")
-
-cluster_consistency_grid
-```
+# Cluster-based Consistency
 
 ```{r}
 # Compute cluster consistency for the grid version, join age, summarise.
@@ -426,6 +419,8 @@ cluster_summary_free <- cluster_consistency_free %>%
 cluster_summary_free
 ```
 
+# Compare to predefined sub-categories
+
 ```{r}
 # Predefine sub-categories within each domain.
 subcategories <- tribble(
@@ -437,7 +432,7 @@ subcategories <- tribble(
   # Animals: rough ecology — adjust to a split that's developmentally meaningful
   "horse",      "herbivore", "lion",    "carnivore",
   "wolf",       "carnivore", "squirrel","herbivore",
-  "sheep",      "land_mammal", "fox",     "carnivore",
+  "sheep",      "herbivore", "fox",     "carnivore",
   "dolphin",    "aquatic",     "fish",    "aquatic",
   "peacock",    "bird",        "pigeon",  "bird",
   "butterfly",  "insect",      "ladybug", "insect",
@@ -478,6 +473,7 @@ compute_cat_org <- function(final_placements, subcategories) {
 ```
 
 ```{r}
+#Between/within sub-category ratio for grid version
 cat_org_grid_collapsed <- compute_cat_org(final_placements_grid, subcategories) %>%
   group_by(participant_id) %>%
   summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop") %>%
@@ -499,6 +495,7 @@ cat_org_grid_collapsed %>%
 ```
 
 ```{r}
+#Between/within sub-category ratio for free sorting version
 cat_org_free <- compute_cat_org(final_placements_free, subcategories) %>%
   left_join(age_df, by = "participant_id") %>%
   mutate(age_group = case_when(age <= 4 ~ "3–4", age <= 6 ~ "5–6", age >= 7 ~ "7–8"))
@@ -512,6 +509,7 @@ cat_org_free %>%
 ```
 
 ```{r}
+#summary table
 all_measures_grid <- compute_consistency(final_placements_grid) %>%
   rename(distance = consistency) %>%
   left_join(
@@ -551,4 +549,34 @@ all_measures_grid %>%
     sd_ratio       = sd(ratio,      na.rm = TRUE),
     .groups        = "drop"
   )
+```
+
+```{r}
+#Between/within sub-category ratio vs age correlation
+ratio_by_age <- compute_cat_org(final_placements_grid, subcategories) %>%
+  left_join(age_df, by = "participant_id") %>%
+  filter(!is.na(age), !is.na(cat_org)) %>%
+  group_by(category) %>%
+  nest() %>%
+  mutate(
+    model  = map(data, ~ lm(cat_org ~ age, data = .x)),
+    tidied = map(model, broom::tidy)
+  ) %>%
+  unnest(tidied) %>%
+  filter(term == "age") %>%
+  select(category, estimate, std.error, statistic, p.value)
+
+ratio_by_age
+```
+
+```{r}
+#consistency vs age
+distance_one_number <- consistency_grid %>%
+  left_join(age_df, by = "participant_id") %>%
+  group_by(participant_id, age) %>%
+  summarise(distance = mean(consistency, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(age), !is.na(distance))
+
+summary(lm(distance ~ age, data = distance_one_number))
+with(distance_one_number, cor.test(age, distance))
 ```
