@@ -17,6 +17,8 @@ library(broom)
 library(here)
 library(lme4)
 library(lmerTest)
+library(dendextend)
+library(ggcorrplot)
 
 # Avoid masking by plyr/etc.
 suppressMessages({
@@ -146,6 +148,19 @@ build_placements <- function(folder, trial_type_label, x_field, y_field,
 ```
 
 ```{r}
+# Add age_group label from an `age` column.
+# Use after joining age_df so you don't have to repeat the case_when each time.
+add_age_group <- function(df) {
+  df %>%
+    mutate(age_group = case_when(
+      age < 5  ~ "3–4",
+      age < 7  ~ "5–6",
+      age >= 7 ~ "7–8"
+    ))
+}
+```
+
+```{r}
 # Pairwise-distance vector from a set of coords, sorted by base_name
 compute_dist_vec <- function(df) {
   coords <- df %>%
@@ -252,12 +267,23 @@ compute_cluster_consistency <- function(final_placements, k = 3) {
 
 ```{r}
 #| message: false
+# Grid cell size in pixels (from the experiment: CELL_SIZE = 104, square cells).
+GRID_CELL_SIZE <- 104
+
 final_placements_grid <- build_placements(
   folder           = file.path(base_path, "grid_sort"),
   trial_type_label = "emotion-grid",
   x_field          = "grid_col",
   y_field          = "grid_row"
-)
+) %>%
+  # Convert grid_col/grid_row to pixel cell-centers, matching the posX/posY
+  # recorded in the data (posX = 104*col + 8, posY = 104*row). We compute from
+  # grid_col/grid_row because every grid file has those, whereas only some
+  # versions store posX/posY directly; the values are identical either way.
+  mutate(
+    posX = posX * GRID_CELL_SIZE + 8,
+    posY = posY * GRID_CELL_SIZE
+  )
 ```
 
 ```{r}
@@ -332,13 +358,7 @@ age_df <- read_csv("age_sheet.csv") %>%
 
 consistency_all <- consistency_all %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(
-    age_group = case_when(
-      age < 5 ~ "3–4",
-      age < 7 ~ "5–6",
-      age >= 7 ~ "7–8"
-    )
-  )
+  add_age_group()
 ```
 
 # Summary table
@@ -398,11 +418,7 @@ cluster_consistency_grid <- compute_cluster_consistency(
   final_placements_grid, k = 3
 ) %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(age_group = case_when(
-    age < 5 ~ "3–4",
-    age < 7 ~ "5–6",
-    age >= 7 ~ "7–8"
-  ))
+  add_age_group()
 
 cluster_summary_grid <- cluster_consistency_grid %>%
   group_by(age_group, category) %>%
@@ -422,11 +438,7 @@ cluster_consistency_free <- compute_cluster_consistency(
   final_placements_free, k = 3
 ) %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(age_group = case_when(
-    age < 5 ~ "3–4",
-    age < 7 ~ "5–6",
-    age >= 7 ~ "7–8"
-  ))
+  add_age_group()
 
 cluster_summary_free <- cluster_consistency_free %>%
   group_by(age_group, category) %>%
@@ -499,11 +511,7 @@ cat_org_grid_collapsed <- compute_cat_org(final_placements_grid, subcategories) 
   group_by(participant_id) %>%
   summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop") %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(age_group = case_when(
-    age < 5 ~ "3–4",
-    age < 7 ~ "5–6",
-    age >= 7 ~ "7–8"
-  ))
+  add_age_group()
 
 cat_org_grid_collapsed %>%
   group_by(age_group) %>%
@@ -519,7 +527,7 @@ cat_org_grid_collapsed %>%
 #Between/within sub-category ratio for free sorting version
 cat_org_free <- compute_cat_org(final_placements_free, subcategories) %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(age_group = case_when(age < 5 ~ "3–4", age < 7 ~ "5–6", age >= 7 ~ "7–8"))
+  add_age_group()
 
 cat_org_free %>%
   group_by(age_group, category) %>%
@@ -552,11 +560,7 @@ all_measures_grid <- compute_consistency(final_placements_grid) %>%
     .groups  = "drop"
   ) %>%
   left_join(age_df, by = "participant_id") %>%
-  mutate(age_group = case_when(
-    age < 5 ~ "3–4",
-    age < 7 ~ "5–6",
-    age >= 7 ~ "7–8"
-  ))
+  add_age_group()
 
 all_measures_grid %>%
   group_by(age_group) %>%
@@ -600,4 +604,242 @@ distance_one_number <- consistency_grid %>%
 
 summary(lm(distance ~ age, data = distance_one_number))
 with(distance_one_number, cor.test(age, distance))
+```
+
+```{r}
+# Participants actually included in analyses = those with placements + a valid age
+included_participants <- bind_rows(
+  final_placements_grid %>% distinct(participant_id) %>% mutate(version = "grid"),
+  final_placements_free %>% distinct(participant_id) %>% mutate(version = "free")
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  filter(!is.na(age)) %>%
+  mutate(age_years = floor(age))   # 7.4 -> 7
+
+# Summary per version
+included_participants %>%
+  group_by(version) %>%
+  summarise(
+    n        = n(),
+    mean_age = round(mean(age_years), 2),
+    min_age  = min(age_years),
+    max_age  = max(age_years),
+    .groups  = "drop"
+  )
+
+# Count at each whole-year age
+included_participants %>%
+  count(version, age_years) %>%
+  arrange(version, age_years)
+```
+
+```{r}
+ggplot(included_participants, aes(x = factor(age_years), fill = version)) +
+  geom_bar() +
+  facet_wrap(~ version) +
+  theme_minimal() +
+  labs(
+    x = "Age (years)",
+    y = "Number of participants",
+    title = "Age distribution of included participants",
+    fill = "Version"
+  )
+```
+
+```{r}
+participant_pairwise_long <- function(fp, normalize = FALSE) {
+  out <- fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    group_by(participant_id, category, trial) %>%
+    group_modify(function(d, key) {
+      d <- d %>% arrange(base_name)
+      m <- as.matrix(dist(as.matrix(d[, c("posX", "posY")])))
+      dimnames(m) <- list(d$base_name, d$base_name)
+      as.data.frame(as.table(m)) %>%
+        transmute(item1 = as.character(Var1),
+                  item2 = as.character(Var2),
+                  dist  = Freq) %>%
+        filter(item1 < item2)
+    }) %>%
+    ungroup() %>%
+    group_by(participant_id, category, item1, item2) %>%
+    summarise(dist = mean(dist), .groups = "drop")   # average across trials
+
+  if (normalize) {
+    out <- out %>%
+      group_by(participant_id, category) %>%
+      mutate(dist = dist / mean(dist, na.rm = TRUE)) %>%
+      ungroup()
+  }
+  out
+}
+
+# Average across subjects within each (category, age_group) -> long format.
+avg_dist_long_byGroup <- function(fp, age_df, normalize = FALSE) {
+  participant_pairwise_long(fp, normalize = normalize) %>%
+    left_join(age_df, by = "participant_id") %>%
+    add_age_group() %>%
+    filter(!is.na(age_group)) %>%
+    group_by(category, age_group, item1, item2) %>%
+    summarise(avg_dist = mean(dist), .groups = "drop")
+}
+
+# Long -> dist object (reimplements the paper's long_to_dist).
+long_to_dist <- function(d) {
+  items <- sort(unique(c(d$item1, d$item2)))
+  m <- matrix(0, length(items), length(items), dimnames = list(items, items))
+  m[cbind(match(d$item1, items), match(d$item2, items))] <- d$avg_dist
+  m[cbind(match(d$item2, items), match(d$item1, items))] <- d$avg_dist
+  as.dist(m)
+}
+```
+
+```{r}
+# Build cluster objects per (version, category, age_group).
+build_clusters <- function(fp, age_df, version_label, normalize = FALSE) {
+  avg_dist_long_byGroup(fp, age_df, normalize = normalize) %>%
+    group_by(category, age_group) %>%
+    nest() %>%
+    mutate(
+      n_concepts = map_int(data, ~ length(unique(c(.x$item1, .x$item2)))),
+      dist_obj   = map(data, long_to_dist),
+      cluster    = map(dist_obj, ~ hclust(.x, method = "ward.D2")),
+      dend       = map(cluster, as.dendrogram),
+      cut3       = map(cluster, ~ cutree(.x, k = 3))
+    ) %>%
+    ungroup() %>%
+    mutate(version = version_label)
+}
+
+clusters_all <- bind_rows(
+  build_clusters(final_placements_grid, age_df, "grid", normalize = TRUE),
+  build_clusters(final_placements_free, age_df, "free", normalize = TRUE)
+)
+
+clusters_all %>% select(version, category, age_group, n_concepts)
+```
+
+```{r}
+# Dendrograms: 3 (category) x 3 (age group) per version.
+library(dendextend)
+
+plot_dendros <- function(clusters_df, version_label, k = 4) {
+  sub <- clusters_df %>% 
+    filter(version == version_label) %>%
+    arrange(category, age_group)
+  
+  if (nrow(sub) == 0) return(invisible(NULL))
+  
+  op <- par(mfrow = c(3, 3), mar = c(2, 2, 3, 6))
+  on.exit(par(op))
+  
+  pwalk(
+    list(sub$cluster, sub$category, sub$age_group),
+    function(clst, cat, ag) {
+      dend <- as.dendrogram(clst)
+      
+      dend <- dend %>%
+        set("branches_lwd", 2) %>%
+        set("branches_k_color", value = c("#5102A3", "#B43359", "#F1731D", "#F6D442"), k = k)
+      
+      plot(
+        dend,
+        horiz = TRUE,
+        main = paste0(version_label, ": ", cat, ", ", ag)
+      )
+    }
+  )
+}
+plot_dendros(clusters_all, "grid")
+plot_dendros(clusters_all, "free")
+```
+
+```{r}
+# Correlation between age groups (cophenetic, like cor.dendlist),
+# one matrix per (version, category).
+age_group_dend_cor <- function(clusters_df, version_label, cat) {
+  sub <- clusters_df %>%
+    filter(version == version_label, category == cat) %>%
+    arrange(age_group)
+  if (nrow(sub) < 2) return(NULL)
+  dl <- do.call(dendlist, setNames(sub$dend, as.character(sub$age_group)))
+  cor.dendlist(dl)
+}
+
+plot_dend_cor <- function(clusters_df, version_label, cat) {
+  m <- tryCatch(age_group_dend_cor(clusters_df, version_label, cat),
+                error = function(e) NULL)
+  if (is.null(m)) {
+    message(version_label, " / ", cat,
+            ": skipped (mismatched leaves or <2 age groups)")
+    return(invisible(NULL))
+  }
+  print(
+    ggcorrplot(m, type = "lower", lab = TRUE, outline.color = "black",
+               ggtheme = ggplot2::theme_void()) +
+      ggtitle(paste0(version_label, " - ", cat))
+  )
+}
+
+for (v in c("grid", "free"))
+  for (cat in c("animals", "plants", "emotions"))
+    plot_dend_cor(clusters_all, v, cat)
+```
+
+```{r}
+participant_dist_vecs <- function(fp) {
+  fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dvec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(dvec = list(reduce(dvec, `+`) / length(dvec)), .groups = "drop")
+}
+
+between_subject_consistency <- function(fp, age_df) {
+  participant_dist_vecs(fp) %>%
+    left_join(age_df, by = "participant_id") %>%
+    add_age_group() %>%
+    filter(!is.na(age_group)) %>%
+    group_by(category, age_group) %>%
+    summarise(
+      between_consistency = {
+        v <- dvec
+        if (length(v) < 2) NA_real_
+        else mean(combn(length(v), 2, function(ix)
+          cor(v[[ix[1]]], v[[ix[2]]], use = "complete.obs")), na.rm = TRUE)
+      },
+      n = n(),
+      .groups = "drop"
+    )
+}
+
+between_subj_all <- bind_rows(
+  between_subject_consistency(final_placements_grid, age_df) %>% mutate(version = "grid"),
+  between_subject_consistency(final_placements_free, age_df) %>% mutate(version = "free")
+)
+between_subj_all
+```
+
+```{r}
+between_subj_all %>%
+  ggplot(aes(x = age_group, y = between_consistency, fill = category)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  facet_wrap(~ version) +
+  scale_fill_manual(
+    values = c(
+      "animals" = "#0F728B",
+      "emotions" =  "#29A099",
+      "plants" = "#EDEF5c"
+    )) +
+  theme_minimal() +
+  labs(
+    x = "Age Group",
+    y = "Between-subject consistency (mean pairwise r)",
+    title = "Between-subject agreement by age group and category"
+  )
 ```
