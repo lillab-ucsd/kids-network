@@ -1,19 +1,32 @@
 import pandas as pd
 
-# Input/output paths
-input_file = "input.tsv"
-output_file = "filtered.tsv"
+input_file = "_images-metadata_things.tsv"
+output_file = "sorted-images.tsv"
 
-# The words you want to keep (edit this list)
-words_to_keep = ["apple", "banana", "cherry"]
+words_to_keep = ["acorn", "cactus", "flower", "peanut", "tree", "grass", "leaf", "broccoli", "cabbage", "blueberry", "cherry", "apple", 
+                 "butterfly", "ladybug", "squirrel", "peacock", "pigeon", "horse", "sheep", "lion", "wolf", "fox", "dolphin", "fish", 
+                 "happy", "sad", "angry", "disgust", "surprise", "scared",
+                 "airplane", "bike", "boat", "bus",  "car", "firetruck", "helicopter", "motorcycle", "sled", "stroller", "train", "truck",
+                "bowl", "plate", "lamp", "pillow",  "scissors", "tape", "refrigerator", "chair", "couch", "bed", "camera", "clock", "vacuum",
+                 "boot", "dress", "pants", "sweater", "sock", "shorts", "scarf", "coat", "hat", "necklace", "shoe", "shirt"]
 
-# Read the TSV
 df = pd.read_csv(input_file, sep="\t", dtype=str, keep_default_na=False)
+df = df[df["Word"].isin(words_to_keep)].copy()
 
-# Keep only rows where the Word column matches one of your words
-filtered = df[df["Word"].isin(words_to_keep)]
+# Convert all four sort columns to numbers (non-numeric -> NaN)
+df["_recog"] = pd.to_numeric(df["recognizability"], errors="coerce")
+df["_name"] = pd.to_numeric(df["nameability"], errors="coerce")
+df["_recog_n"] = pd.to_numeric(df["recognizability_N-ratings"], errors="coerce")
+df["_name_n"] = pd.to_numeric(df["nameability_N-ratings"], errors="coerce")
 
-# Write back out as TSV
-filtered.to_csv(output_file, sep="\t", index=False)
+# Within each Word, sort by the four metrics in priority order.
+# Each one only breaks ties left unresolved by the ones before it.
+df = df.sort_values(
+    by=["Word", "_recog", "_name", "_recog_n", "_name_n"],
+    ascending=[True, False, False, False, False],
+    na_position="last",
+)
 
-print(f"Kept {len(filtered)} of {len(df)} rows.")
+df = df.drop(columns=["_recog", "_name", "_recog_n", "_name_n"])
+df.to_csv(output_file, sep="\t", index=False)
+print(f"Wrote {len(df)} rows.")
