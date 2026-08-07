@@ -1,0 +1,274 @@
+"trial_type","trial_index","plugin_version","time_elapsed","participant_id","version","success","timeout","failed_images","failed_audio","failed_video","participant","phase","block","trial","placements","move_log","is_final_summary","rt","stimulus","response"
+"html-button-response","0","2.1.0","33447","P079","11","","","","","","","","","","","","","","",""
+"preload","1","2.1.0","34436","P079","11","true","false","[]","[]","[]","","","","","","","","","",""
+"html-button-response","2","2.1.0","112884","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","3","2.1.0","117642","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","4","null","180381","P079","11","","","","","","demo","practice","null","-1","[{""image_name"":""sandwich.jpg"",""posX"":454.5,""posY"":362.5},{""image_name"":""hamburger.jpg"",""posX"":589,""posY"":371},{""image_name"":""french_fries_1.jpg"",""posX"":764.5,""posY"":515.5},{""image_name"":""ice_cream_1.jpg"",""posX"":1012.5,""posY"":240.5},{""image_name"":""cookie.jpg"",""posX"":307.5,""posY"":231.5}]","[{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""sandwich.jpg"",""posX"":454.5,""posY"":362.5,""timestamp"":123383},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""hamburger.jpg"",""posX"":215,""posY"":464.5,""timestamp"":148915},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""french_fries_1.jpg"",""posX"":764.5,""posY"":515.5,""timestamp"":159604},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""ice_cream_1.jpg"",""posX"":1012.5,""posY"":240.5,""timestamp"":163515.00000000003},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""cookie.jpg"",""posX"":307.5,""posY"":231.5,""timestamp"":166911},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-1,""image"":""hamburger.jpg"",""posX"":589,""posY"":371,""timestamp"":174939}]","1","","",""
+"html-button-response","5","2.1.0","186194","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","6","2.1.0","201557","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","7","2.1.0","206826","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","8","null","251216","P079","11","","","","","","demo","practice","null","-2","[{""image_name"":""toast.jpg"",""posX"":343.5,""posY"":246},{""image_name"":""bread.jpg"",""posX"":468,""posY"":255.5},{""image_name"":""croissant.jpg"",""posX"":215.5,""posY"":256.5},{""image_name"":""chocolate_2.jpg"",""posX"":243,""posY"":620.5},{""image_name"":""candy.jpg"",""posX"":372.5,""posY"":644}]","[{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-2,""image"":""toast.jpg"",""posX"":343.5,""posY"":246,""timestamp"":226596},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-2,""image"":""bread.jpg"",""posX"":468,""posY"":255.5,""timestamp"":238186},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-2,""image"":""croissant.jpg"",""posX"":215.5,""posY"":256.5,""timestamp"":240972},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-2,""image"":""chocolate_2.jpg"",""posX"":243,""posY"":620.5,""timestamp"":243265.00000000003},{""participant"":""demo"",""phase"":""practice"",""block"":null,""trial"":-2,""image"":""candy.jpg"",""posX"":372.5,""posY"":644,""timestamp"":244949}]","1","","",""
+"html-button-response","9","2.1.0","254315","P079","11","","","","","","","","","","","","","3096","
+      <div style=""
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding:80px 20px 40px 20px;
+        text-align:center;
+      "">
+        <img src=""stimuli/fireworks.gif"" style=""
+          width:300px;
+          height:200px;
+          animation: spinScale 1.5s ease-in-out infinite;
+          margin-bottom:30px;
+        "">
+        <div style=""font-size:28px; font-weight:600;"">
+          Awesome! Now you're ready!
+        </div>
+      </div>
+
+
+    ","0"
+"html-button-response","10","2.1.0","255314","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","11","2.1.0","256958","P079","11","","","","","","","","","","","","","1642","
+            <div style=""font-size:24px; padding:20px;"">
+              Block 1 of 3
+            </div>
+          ","0"
+"html-button-response","12","2.1.0","267880","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","13","null","337097","P079","11","","","","","","P079","main","1","1","[{""image_name"":""flower_2.jpg"",""posX"":875.5,""posY"":653},{""image_name"":""grass_2.jpg"",""posX"":654,""posY"":224},{""image_name"":""tree_2.jpg"",""posX"":809.5,""posY"":226},{""image_name"":""cabbage_2.jpg"",""posX"":948,""posY"":237.5},{""image_name"":""blueberry_2.jpg"",""posX"":287,""posY"":532.5},{""image_name"":""peanut_2.jpg"",""posX"":873,""posY"":480},{""image_name"":""acorn_2.jpg"",""posX"":971,""posY"":459.5},{""image_name"":""cherry_2.jpg"",""posX"":432,""posY"":513},{""image_name"":""broccoli_2.jpg"",""posX"":1087,""posY"":227},{""image_name"":""leaf_2.jpg"",""posX"":528.5,""posY"":237.5},{""image_name"":""apple_2.jpg"",""posX"":566.5,""posY"":493},{""image_name"":""cactus_2.jpg"",""posX"":408.5,""posY"":251.5}]","[{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""flower_2.jpg"",""posX"":337.5,""posY"":232,""timestamp"":270566.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""grass_2.jpg"",""posX"":654,""posY"":224,""timestamp"":278354},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""tree_2.jpg"",""posX"":809.5,""posY"":226,""timestamp"":281322},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""cabbage_2.jpg"",""posX"":948,""posY"":237.5,""timestamp"":285150.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""blueberry_2.jpg"",""posX"":287,""posY"":532.5,""timestamp"":288494},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""peanut_2.jpg"",""posX"":873,""posY"":480,""timestamp"":294255},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""acorn_2.jpg"",""posX"":971,""posY"":459.5,""timestamp"":296964},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""cherry_2.jpg"",""posX"":432,""posY"":513,""timestamp"":299583},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""broccoli_2.jpg"",""posX"":729,""posY"":502.5,""timestamp"":306232},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""broccoli_2.jpg"",""posX"":1087,""posY"":227,""timestamp"":316936},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""leaf_2.jpg"",""posX"":528.5,""posY"":237.5,""timestamp"":322231},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""apple_2.jpg"",""posX"":566.5,""posY"":493,""timestamp"":325383},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""cactus_2.jpg"",""posX"":478.5,""posY"":341.5,""timestamp"":329935},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""flower_2.jpg"",""posX"":875.5,""posY"":653,""timestamp"":332487},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":1,""image"":""cactus_2.jpg"",""posX"":408.5,""posY"":251.5,""timestamp"":333705}]","1","","",""
+"html-button-response","14","2.1.0","348182","P079","11","","","","","","","","","","","","","11078","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"
+"html-button-response","15","2.1.0","351785","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","16","null","400720","P079","11","","","","","","P079","main","1","2","[{""image_name"":""apple_1.jpg"",""posX"":227.5,""posY"":472.5},{""image_name"":""flower_1.jpg"",""posX"":434.5,""posY"":230.5},{""image_name"":""blueberry_1.jpg"",""posX"":338,""posY"":479.5},{""image_name"":""broccoli_1.jpg"",""posX"":802.5,""posY"":242.5},{""image_name"":""cherry_1.jpg"",""posX"":465.5,""posY"":475.5},{""image_name"":""cactus_1.jpg"",""posX"":950.5,""posY"":239},{""image_name"":""peanut_1.jpg"",""posX"":1098.5,""posY"":348},{""image_name"":""tree_1.jpg"",""posX"":326.5,""posY"":247},{""image_name"":""grass_1.jpg"",""posX"":216.5,""posY"":244.5},{""image_name"":""cabbage_1.jpg"",""posX"":558,""posY"":247},{""image_name"":""leaf_1.jpg"",""posX"":661.5,""posY"":251.5},{""image_name"":""acorn_1.jpg"",""posX"":951.5,""posY"":371}]","[{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""apple_1.jpg"",""posX"":227.5,""posY"":472.5,""timestamp"":354517},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""apple_1.jpg"",""posX"":227.5,""posY"":472.5,""timestamp"":354892},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""flower_1.jpg"",""posX"":434.5,""posY"":230.5,""timestamp"":356827},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""blueberry_1.jpg"",""posX"":338,""posY"":479.5,""timestamp"":358236},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""broccoli_1.jpg"",""posX"":833.5,""posY"":247,""timestamp"":360522},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""cherry_1.jpg"",""posX"":465.5,""posY"":475.5,""timestamp"":363015},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""cactus_1.jpg"",""posX"":321.5,""posY"":225.5,""timestamp"":366342},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""cactus_1.jpg"",""posX"":939,""posY"":552.5,""timestamp"":367858},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""peanut_1.jpg"",""posX"":1098.5,""posY"":348,""timestamp"":370594},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""tree_1.jpg"",""posX"":326.5,""posY"":247,""timestamp"":375080},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""grass_1.jpg"",""posX"":216.5,""posY"":244.5,""timestamp"":376940},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""cabbage_1.jpg"",""posX"":558,""posY"":247,""timestamp"":379300},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""leaf_1.jpg"",""posX"":661.5,""posY"":251.5,""timestamp"":381159},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""broccoli_1.jpg"",""posX"":802.5,""posY"":242.5,""timestamp"":383153},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""acorn_1.jpg"",""posX"":951.5,""posY"":371,""timestamp"":385562},{""participant"":""P079"",""phase"":""main"",""block"":1,""trial"":2,""image"":""cactus_1.jpg"",""posX"":950.5,""posY"":239,""timestamp"":389755}]","1","","",""
+"html-button-response","17","2.1.0","403118","P079","11","","","","","","","","","","","","","2393","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"
+"html-button-response","18","2.1.0","423979","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","19","2.1.0","427541","P079","11","","","","","","","","","","","","","3558","
+      <div style=""
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding:80px 20px 40px 20px;
+        text-align:center;
+      "">
+        <img src=""stimuli/fireworks.gif"" style=""
+          width:300px;
+          height:200px;
+          animation: spinScale 1.5s ease-in-out infinite;
+          margin-bottom:30px;
+        "">
+        <div style=""font-size:28px; font-weight:600;"">
+          Great job! Ready for the next round?
+        </div>
+      </div>
+
+
+    ","0"
+"html-button-response","20","2.1.0","428681","P079","11","","","","","","","","","","","","","1138","
+            <div style=""font-size:24px; padding:20px;"">
+              Block 2 of 3
+            </div>
+          ","0"
+"html-button-response","21","2.1.0","432097","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","22","null","528247","P079","11","","","","","","P079","main","2","3","[{""image_name"":""squirrel_2.jpg"",""posX"":324.5,""posY"":191},{""image_name"":""peacock_2.jpg"",""posX"":432,""posY"":175.5},{""image_name"":""wolf_2.jpg"",""posX"":241,""posY"":535.5},{""image_name"":""fish_2.jpg"",""posX"":564.5,""posY"":383},{""image_name"":""butterfly_2.jpg"",""posX"":991.5,""posY"":258.5},{""image_name"":""sheep_2.jpg"",""posX"":702.5,""posY"":180.5},{""image_name"":""dolphin_2.jpg"",""posX"":431.5,""posY"":365.5},{""image_name"":""pigeon_2.jpg"",""posX"":925,""posY"":642.5},{""image_name"":""lion_2.jpg"",""posX"":555,""posY"":548},{""image_name"":""fox_2.jpg"",""posX"":412.5,""posY"":531},{""image_name"":""ladybug_2.jpg"",""posX"":1125.5,""posY"":257.5},{""image_name"":""horse_2.jpg"",""posX"":850.5,""posY"":165.5}]","[{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""squirrel_2.jpg"",""posX"":324.5,""posY"":191,""timestamp"":435885},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""peacock_2.jpg"",""posX"":432,""posY"":175.5,""timestamp"":438569},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""wolf_2.jpg"",""posX"":241,""posY"":535.5,""timestamp"":443556},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""fish_2.jpg"",""posX"":776.5,""posY"":343,""timestamp"":446224},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""butterfly_2.jpg"",""posX"":569,""posY"":193.5,""timestamp"":453988},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""butterfly_2.jpg"",""posX"":777,""posY"":630,""timestamp"":456347.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""sheep_2.jpg"",""posX"":398.5,""posY"":538.5,""timestamp"":460492},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""dolphin_2.jpg"",""posX"":1028.5,""posY"":439,""timestamp"":470231},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""pigeon_2.jpg"",""posX"":925,""posY"":642.5,""timestamp"":475585.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""lion_2.jpg"",""posX"":555,""posY"":548,""timestamp"":484523},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""sheep_2.jpg"",""posX"":815,""posY"":192.5,""timestamp"":485557},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""fox_2.jpg"",""posX"":412.5,""posY"":531,""timestamp"":489727.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""ladybug_2.jpg"",""posX"":1125.5,""posY"":257.5,""timestamp"":494551},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""butterfly_2.jpg"",""posX"":962,""posY"":272.5,""timestamp"":495946},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""fish_2.jpg"",""posX"":564.5,""posY"":383,""timestamp"":497315},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""sheep_2.jpg"",""posX"":702.5,""posY"":180.5,""timestamp"":498874},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""horse_2.jpg"",""posX"":850.5,""posY"":165.5,""timestamp"":508130},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""butterfly_2.jpg"",""posX"":991.5,""posY"":258.5,""timestamp"":516517.00000000006},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":3,""image"":""dolphin_2.jpg"",""posX"":431.5,""posY"":365.5,""timestamp"":520421.00000000006}]","1","","",""
+"html-button-response","23","2.1.0","531722","P079","11","","","","","","","","","","","","","3472","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"
+"html-button-response","24","2.1.0","538169","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","25","null","617829","P079","11","","","","","","P079","main","2","4","[{""image_name"":""horse_1.jpg"",""posX"":258.5,""posY"":156},{""image_name"":""pigeon_1.jpg"",""posX"":239,""posY"":644},{""image_name"":""squirrel_1.jpg"",""posX"":583.5,""posY"":167.5},{""image_name"":""peacock_1.jpg"",""posX"":414,""posY"":620},{""image_name"":""butterfly_1.jpg"",""posX"":604.5,""posY"":636.5},{""image_name"":""fish_1.jpg"",""posX"":740.5,""posY"":257},{""image_name"":""sheep_1.jpg"",""posX"":414.5,""posY"":158},{""image_name"":""dolphin_1.jpg"",""posX"":902.5,""posY"":272},{""image_name"":""wolf_1.jpg"",""posX"":1089.5,""posY"":415.5},{""image_name"":""lion_1.jpg"",""posX"":773.5,""posY"":430},{""image_name"":""fox_1.jpg"",""posX"":933.5,""posY"":422},{""image_name"":""ladybug_1.jpg"",""posX"":760,""posY"":632.5}]","[{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""horse_1.jpg"",""posX"":258.5,""posY"":156,""timestamp"":541609},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""pigeon_1.jpg"",""posX"":239,""posY"":644,""timestamp"":544286},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""squirrel_1.jpg"",""posX"":774.5,""posY"":633.5,""timestamp"":548772},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""peacock_1.jpg"",""posX"":414,""posY"":620,""timestamp"":555345},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""butterfly_1.jpg"",""posX"":604.5,""posY"":636.5,""timestamp"":557360},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""squirrel_1.jpg"",""posX"":1030,""posY"":630.5,""timestamp"":558636},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""fish_1.jpg"",""posX"":740.5,""posY"":257,""timestamp"":560345},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""sheep_1.jpg"",""posX"":414.5,""posY"":158,""timestamp"":565140},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""dolphin_1.jpg"",""posX"":902.5,""posY"":272,""timestamp"":567925.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""wolf_1.jpg"",""posX"":215,""posY"":433,""timestamp"":571469},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""wolf_1.jpg"",""posX"":1089.5,""posY"":415.5,""timestamp"":578923},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""lion_1.jpg"",""posX"":625.5,""posY"":423,""timestamp"":583718},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""fox_1.jpg"",""posX"":933.5,""posY"":422,""timestamp"":587562},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""lion_1.jpg"",""posX"":773.5,""posY"":430,""timestamp"":589131},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""ladybug_1.jpg"",""posX"":351.5,""posY"":406.5,""timestamp"":595708},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""ladybug_1.jpg"",""posX"":760,""posY"":632.5,""timestamp"":603364},{""participant"":""P079"",""phase"":""main"",""block"":2,""trial"":4,""image"":""squirrel_1.jpg"",""posX"":583.5,""posY"":167.5,""timestamp"":612453}]","1","","",""
+"html-button-response","26","2.1.0","623996","P079","11","","","","","","","","","","","","","6164","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"
+"html-button-response","27","2.1.0","643753","P079","11","","","","","","","","","","","","","","",""
+"html-button-response","28","2.1.0","645256","P079","11","","","","","","","","","","","","","1498","
+      <div style=""
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding:80px 20px 40px 20px;
+        text-align:center;
+      "">
+        <img src=""stimuli/fireworks.gif"" style=""
+          width:300px;
+          height:200px;
+          animation: spinScale 1.5s ease-in-out infinite;
+          margin-bottom:30px;
+        "">
+        <div style=""font-size:28px; font-weight:600;"">
+          Great job! Ready for the next round?
+        </div>
+      </div>
+
+
+    ","0"
+"html-button-response","29","2.1.0","646572","P079","11","","","","","","","","","","","","","1315","
+            <div style=""font-size:24px; padding:20px;"">
+              Block 3 of 3
+            </div>
+          ","0"
+"html-button-response","30","2.1.0","657037","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","31","null","702103","P079","11","","","","","","P079","main","3","5","[{""image_name"":""sad_4.jpg"",""posX"":310,""posY"":133},{""image_name"":""happy_4.jpg"",""posX"":234.5,""posY"":659},{""image_name"":""surprise_3.jpg"",""posX"":666,""posY"":636.5},{""image_name"":""angry_3.jpg"",""posX"":807,""posY"":145},{""image_name"":""disgust_4.jpg"",""posX"":1057,""posY"":393},{""image_name"":""fearful_4.jpg"",""posX"":959,""posY"":629.5},{""image_name"":""surprise_4.jpg"",""posX"":537,""posY"":626.5},{""image_name"":""disgust_3.jpg"",""posX"":932,""posY"":403},{""image_name"":""sad_3.jpg"",""posX"":477,""posY"":133},{""image_name"":""fearful_3.jpg"",""posX"":827,""posY"":607.5},{""image_name"":""angry_4.jpg"",""posX"":933.5,""posY"":158},{""image_name"":""happy_3.jpg"",""posX"":371.5,""posY"":652}]","[{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""sad_4.jpg"",""posX"":310,""posY"":133,""timestamp"":659832},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""happy_4.jpg"",""posX"":234.5,""posY"":659,""timestamp"":661724},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""surprise_3.jpg"",""posX"":666,""posY"":636.5,""timestamp"":664209.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""angry_3.jpg"",""posX"":807,""posY"":145,""timestamp"":667570},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""disgust_4.jpg"",""posX"":1057,""posY"":393,""timestamp"":670272},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""fearful_4.jpg"",""posX"":959,""posY"":629.5,""timestamp"":675726},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""surprise_4.jpg"",""posX"":537,""posY"":626.5,""timestamp"":677968},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""disgust_3.jpg"",""posX"":215,""posY"":400,""timestamp"":680336},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""sad_3.jpg"",""posX"":900,""posY"":388,""timestamp"":681704.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""sad_3.jpg"",""posX"":477,""posY"":133,""timestamp"":683905},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""disgust_3.jpg"",""posX"":932,""posY"":403,""timestamp"":685874},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""fearful_3.jpg"",""posX"":827,""posY"":607.5,""timestamp"":689953},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""angry_4.jpg"",""posX"":933.5,""posY"":158,""timestamp"":694044},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":5,""image"":""happy_3.jpg"",""posX"":371.5,""posY"":652,""timestamp"":697423}]","1","","",""
+"html-button-response","32","2.1.0","705512","P079","11","","","","","","","","","","","","","3407","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"
+"html-button-response","33","2.1.0","710831","P079","11","","","","","","","","","","","","","","",""
+"emotion-grid","34","null","755287","P079","11","","","","","","P079","main","3","6","[{""image_name"":""happy_1.jpg"",""posX"":262,""posY"":161},{""image_name"":""sad_1.jpg"",""posX"":1105,""posY"":380},{""image_name"":""angry_1.jpg"",""posX"":797.5,""posY"":149.5},{""image_name"":""disgust_2.jpg"",""posX"":349.5,""posY"":634.5},{""image_name"":""angry_2.jpg"",""posX"":920.5,""posY"":178},{""image_name"":""happy_2.jpg"",""posX"":392.5,""posY"":177},{""image_name"":""surprise_2.jpg"",""posX"":909.5,""posY"":631},{""image_name"":""fearful_2.jpg"",""posX"":650.5,""posY"":635},{""image_name"":""surprise_1.jpg"",""posX"":1040,""posY"":623.5},{""image_name"":""sad_2.jpg"",""posX"":943,""posY"":384.5},{""image_name"":""fearful_1.jpg"",""posX"":517,""posY"":633},{""image_name"":""disgust_1.jpg"",""posX"":255,""posY"":639.5}]","[{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""happy_1.jpg"",""posX"":262,""posY"":161,""timestamp"":713608.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""sad_1.jpg"",""posX"":1105,""posY"":380,""timestamp"":716143},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""angry_1.jpg"",""posX"":797.5,""posY"":149.5,""timestamp"":717995},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""disgust_2.jpg"",""posX"":349.5,""posY"":634.5,""timestamp"":719928},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""angry_2.jpg"",""posX"":920.5,""posY"":178,""timestamp"":724146.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""happy_2.jpg"",""posX"":392.5,""posY"":177,""timestamp"":727240},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""surprise_2.jpg"",""posX"":909.5,""posY"":631,""timestamp"":730276.0000000001},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""fearful_2.jpg"",""posX"":650.5,""posY"":635,""timestamp"":735447},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""surprise_1.jpg"",""posX"":1040,""posY"":623.5,""timestamp"":739557},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""sad_2.jpg"",""posX"":943,""posY"":384.5,""timestamp"":742583},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""fearful_1.jpg"",""posX"":517,""posY"":633,""timestamp"":747003},{""participant"":""P079"",""phase"":""main"",""block"":3,""trial"":6,""image"":""disgust_1.jpg"",""posX"":255,""posY"":639.5,""timestamp"":750890}]","1","","",""
+"html-button-response","35","2.1.0","773477","P079","11","","","","","","","","","","","","","18188","
+    <div style=""
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:80px 20px 40px 20px;
+      text-align:center;
+    "">
+      <img src=""stimuli/star.png"" style=""
+        width:160px;
+        height:160px;
+        animation: spinScale 1.5s ease-in-out infinite;
+        margin-bottom:30px;
+      "">
+      <div style=""font-size:28px; font-weight:600;"">
+        Great job!
+      </div>
+    </div>
+
+    <style>
+      @keyframes spinScale {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.4) rotate(180deg); }
+        100% { transform: scale(1) rotate(360deg); }
+      }
+    </style>
+  ","0"

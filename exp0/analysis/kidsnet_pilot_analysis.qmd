@@ -354,9 +354,11 @@ within_trial_all
 ```{r}
 #| message: false
 age_df <- read_csv("age_sheet.csv") %>%
+  select(participant_id, age) %>%           # drop the empty ...3 / ...4
   mutate(participant_id = as.character(participant_id))
 
 consistency_all <- consistency_all %>%
+  select(-any_of(c("age", "age_group", "...3", "...4"))) %>%
   left_join(age_df, by = "participant_id") %>%
   add_age_group()
 ```
@@ -842,4 +844,240 @@ between_subj_all %>%
     y = "Between-subject consistency (mean pairwise r)",
     title = "Between-subject agreement by age group and category"
   )
+```
+
+# Comprehension Check
+
+```{r}
+set.seed(42)
+
+PRACTICE_TRIAL <- -2
+N_NULL         <- 10000
+ALPHA          <- 0.05
+
+GROUP_MAP <- c(
+  toast     = "bread",
+  bread     = "bread",
+  croissant = "bread",
+  chocolate = "sweet",
+  candy     = "sweet"
+)
+
+# ---- 1. Load free-sort practice trials -------------------------------------
+# NOTE: no block filter here - practice trials have block == null.
+
+free_practice_raw <- load_folder(file.path(base_path, "free_sort")) %>%
+  filter(trial_type == "emotion-grid")
+
+practice_placements <- free_practice_raw %>%
+  split(seq_len(nrow(.))) %>%
+  map_dfr(~ extract_final_placements(.x, "posX", "posY",
+                                     source_col = "placements")) %>%
+  mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+  filter(trial == PRACTICE_TRIAL) %>%
+  mutate(
+    image_stem = str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+    base_name  = str_remove(image_stem, "_\\d+$"),
+    group      = unname(GROUP_MAP[base_name])
+  )
+
+stopifnot(nrow(practice_placements) > 0)
+
+unmatched <- practice_placements %>% filter(is.na(group)) %>% distinct(base_name)
+if (nrow(unmatched) > 0) {
+  warning("Unmatched images (fix GROUP_MAP): ",
+          paste(unmatched$base_name, collapse = ", "))
+}
+
+cat("Practice-2 children:", n_distinct(practice_placements$participant_id), "\n")
+print(practice_placements %>% count(participant_id, name = "n") %>% count(n))
+
+# ---- 2. Separation score ---------------------------------------------------
+
+separation_score <- function(x, y, grp) {
+  if (length(unique(grp)) < 2) return(NA_real_)
+  d    <- as.matrix(dist(cbind(x, y)))
+  same <- outer(grp, grp, "==")
+  keep <- upper.tri(d)
+  within  <- d[keep & same]
+  between <- d[keep & !same]
+  if (!length(within) || !length(between)) return(NA_real_)
+  mean(between) - mean(within)
+}
+
+observed <- practice_placements %>%
+  filter(!is.na(group)) %>%
+  group_by(participant_id) %>%
+  summarise(n_images = n(),
+            score    = separation_score(posX, posY, group),
+            .groups  = "drop")
+
+# ---- 3. Null: five images dropped at random in the same space --------------
+
+x_range <- range(practice_placements$posX, na.rm = TRUE)
+y_range <- range(practice_placements$posY, na.rm = TRUE)
+grp_template <- unname(GROUP_MAP)
+
+null_scores <- replicate(N_NULL, {
+  separation_score(runif(5, x_range[1], x_range[2]),
+                   runif(5, y_range[1], y_range[2]),
+                   grp_template)
+})
+null_scores <- null_scores[!is.na(null_scores)]
+null_cutoff <- unname(quantile(null_scores, 1 - ALPHA))
+
+cat("x range:", paste(round(x_range), collapse = " to "),
+    " y range:", paste(round(y_range), collapse = " to "), "\n")
+cat("Null median:", round(median(null_scores), 1),
+    " cutoff:", round(null_cutoff, 1), "\n")
+
+# ---- 4. Flag each child ----------------------------------------------------
+
+comprehension <- observed %>%
+  rowwise() %>%
+  mutate(p_value = if (is.na(score)) NA_real_ else mean(null_scores >= score),
+         passed  = if (is.na(score)) NA else score > null_cutoff) %>%
+  ungroup()
+
+cat("Overall pass rate:", round(mean(comprehension$passed, na.rm = TRUE), 3), "\n")
+
+# ---- 5. Pass rate by age - INSPECT BEFORE EXCLUDING ANYONE -----------------
+
+comprehension_by_age <- comprehension %>%
+  left_join(age_df %>% select(participant_id, age), by = "participant_id") %>%
+  add_age_group() %>%
+  group_by(age_group) %>%
+  summarise(n = n(),
+            n_passed   = sum(passed, na.rm = TRUE),
+            pass_rate  = mean(passed, na.rm = TRUE),
+            mean_score = mean(score, na.rm = TRUE),
+            .groups = "drop")
+
+comprehension_by_age
+```
+
+```{r}
+set.seed(42)
+
+AGE_MIN <- 4     # inclusive
+AGE_MAX <- 9     # exclusive: floor(age) of 4,5,6,7,8
+
+# Children in the analysis window, with whole-year bin
+age_ok <- age_df %>%
+  mutate(age_years = floor(age)) %>%
+  filter(age_years >= AGE_MIN, age_years < AGE_MAX)
+
+cat("Children in age_sheet:", nrow(age_df),
+    "| in 4-8 window:", nrow(age_ok),
+    "| dropped:", nrow(age_df) - nrow(age_ok), "\n")
+
+# Restrict everything to that window
+placements_free <- final_placements_free %>%
+  semi_join(age_ok, by = "participant_id")
+
+consistency_free_only <- consistency_all %>%
+  filter(version == "free") %>%
+  semi_join(age_ok, by = "participant_id")
+
+tbl1_sample <- placements_free %>%
+  distinct(participant_id) %>%
+  left_join(age_ok, by = "participant_id") %>%
+  count(age_years, name = "n_children")
+
+cat("\n=== 1. SAMPLE OVERVIEW (free version, ages 4-8) ===\n")
+print(tbl1_sample)
+cat("Total children:", sum(tbl1_sample$n_children), "\n")
+
+missing_age <- final_placements_free %>%
+  distinct(participant_id) %>%
+  anti_join(age_df, by = "participant_id")
+cat("Children with data but no age recorded:", nrow(missing_age), "\n")
+if (nrow(missing_age)) print(missing_age)
+
+all_kids <- placements_free %>%
+  distinct(participant_id) %>%
+  left_join(age_ok, by = "participant_id")
+
+flag_comprehension <- if (exists("comprehension")) {
+  comprehension %>%
+    filter(passed == FALSE) %>%
+    distinct(participant_id) %>%
+    mutate(flag_failed_practice = TRUE)
+} else {
+  tibble(participant_id = character(), flag_failed_practice = logical())
+}
+
+flags <- all_kids %>%
+  left_join(flag_incomplete,      by = "participant_id") %>%
+  left_join(flag_spread,          by = "participant_id") %>%
+  left_join(flag_comprehension,   by = "participant_id") %>%
+  left_join(flag_low_consistency, by = "participant_id") %>%
+  mutate(across(starts_with("flag_"), ~ replace_na(.x, FALSE)))
+
+tbl4_decision <- flags %>%
+  group_by(age_years) %>%
+  summarise(
+    n                     = n(),
+    `failed practice`     = sum(flag_failed_practice),
+    .groups = "drop"
+  )
+
+cat("\n=== 4. DECISION TABLE: children flagged by each criterion ===\n")
+cat("(low consistency shown for comparison only - it excludes on the DV)\n")
+print(tbl4_decision)
+
+cat("\nAs percentages within age:\n")
+print(tbl4_decision %>% mutate(across(-c(age_years, n), ~ round(100 * .x / n, 1))))
+
+# ---------------------------------------------------------------------------
+# 5. SENSITIVITY — uses CONTINUOUS age, not the bins
+# ---------------------------------------------------------------------------
+
+fit_age_effect <- function(dat, label) {
+  m <- lm(consistency ~ age, data = dat)
+  tibble(
+    sample     = label,
+    n_children = n_distinct(dat$participant_id),
+    n_obs      = sum(!is.na(dat$consistency)),
+    slope      = round(coef(m)[["age"]], 4),
+    p_value    = round(summary(m)$coefficients["age", 4], 4),
+    mean_cons  = round(mean(dat$consistency, na.rm = TRUE), 3)
+  )
+}
+
+drop_ids <- function(f) flags %>% filter(.data[[f]]) %>% pull(participant_id)
+
+tbl5_sensitivity <- bind_rows(
+  fit_age_effect(consistency_free_only, "full sample (4-8)"),
+  fit_age_effect(consistency_free_only %>%
+                   filter(!participant_id %in% drop_ids("flag_failed_practice")),
+                 "drop failed practice"),
+  fit_age_effect(consistency_free_only %>%
+                   filter(!participant_id %in% unique(c(
+                     drop_ids("flag_incomplete"),
+                     drop_ids("flag_low_spread"),
+                     drop_ids("flag_failed_practice")))),
+                 "drop all three")
+)
+
+cat("\n=== 5. SENSITIVITY: age effect on consistency ===\n")
+print(tbl5_sensitivity)
+
+# ---------------------------------------------------------------------------
+# 6. PLOT — continuous age
+# ---------------------------------------------------------------------------
+
+consistency_free_only %>%
+  left_join(flags %>% select(participant_id, starts_with("flag_")),
+            by = "participant_id") %>%
+  mutate(any_flag = flag_incomplete | flag_low_spread | flag_failed_practice) %>%
+  ggplot(aes(x = age, y = consistency, colour = any_flag)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, colour = "black") +
+  scale_colour_manual(values = c("FALSE" = "grey50", "TRUE" = "red"),
+                      name = "would be excluded") +
+  theme_minimal() +
+  labs(title = "Who gets excluded, relative to the age effect",
+       subtitle = "Free version, ages 4-8. Red clustering low = criterion overlaps the DV",
+       x = "Age (years)", y = "Consistency")
 ```
