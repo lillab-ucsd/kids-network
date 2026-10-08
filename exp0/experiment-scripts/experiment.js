@@ -1,19 +1,23 @@
 const DEMO_PARTICIPANT = "demo";
 
+/* Practice pictures match the adult version (tools vs. toys), so the
+   practice stimuli are identical across the two studies. The kid-facing
+   instructions and example pages are unchanged. */
+
 const MINI_PRACTICE_IMAGES = [
-  "stimuli/food/sandwich.jpg",
-  "stimuli/food/hamburger.jpg",
-  "stimuli/food/french_fries_1.jpg",
-  "stimuli/food/ice_cream_1.jpg",
-  "stimuli/food/cookie.jpg",
+  "stimuli/tools/screwdriver_1.jpg",
+  "stimuli/tools/screwdriver_2.jpg",
+  "stimuli/toys/ball_1.jpg",
+  "stimuli/toys/ball_2.jpg",
+  "stimuli/tools/wrench_1.jpg",
 ];
 
 const MINI_PRACTICE_IMAGES_2 = [
-  "stimuli/food/toast.jpg",
-  "stimuli/food/bread.jpg",
-  "stimuli/food/croissant.jpg",
-  "stimuli/food/chocolate_2.jpg",
-  "stimuli/food/candy.jpg"
+  "stimuli/tools/hammer_1.jpg",
+  "stimuli/tools/hammer_2.jpg",
+  "stimuli/toys/teddy_bear_1.jpg",
+  "stimuli/toys/teddy_bear_2.jpg",
+  "stimuli/toys/block_1.jpg"
 ];
 
 const NUM_BLOCKS = 3;
