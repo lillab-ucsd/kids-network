@@ -228,19 +228,90 @@ const CATEGORIES = {
       "stimuli/plants/apple_2.jpg",
       "stimuli/plants/blueberry_2.jpg",
       "stimuli/plants/peanut_2.jpg"]
+  ],
+  vehicle: [
+    ["stimuli/vehicles/airplane_1.jpg", "stimuli/vehicles/car_1.jpg",
+     "stimuli/vehicles/bike_1.jpg",     "stimuli/vehicles/firetruck_1.jpg",
+     "stimuli/vehicles/boat_1.jpg",     "stimuli/vehicles/helicopter_1.jpg",
+     "stimuli/vehicles/bus_1.jpg",      "stimuli/vehicles/motorcycle_1.jpg",
+     "stimuli/vehicles/stroller_1.jpg", "stimuli/vehicles/train_1.jpg",
+     "stimuli/vehicles/sled_1.jpg",     "stimuli/vehicles/truck_1.jpg"],
+    ["stimuli/vehicles/airplane_2.jpg", "stimuli/vehicles/car_2.jpg",
+     "stimuli/vehicles/bike_2.jpg",     "stimuli/vehicles/firetruck_2.jpg",
+     "stimuli/vehicles/boat_2.jpg",     "stimuli/vehicles/helicopter_2.jpg",
+     "stimuli/vehicles/bus_2.jpg",      "stimuli/vehicles/motorcycle_2.jpg",
+     "stimuli/vehicles/stroller_2.jpg", "stimuli/vehicles/train_2.jpg",
+     "stimuli/vehicles/sled_2.jpg",     "stimuli/vehicles/truck_2.jpg"]
+  ],
+  clothing: [
+    ["stimuli/clothing/dress_1.jpg",    "stimuli/clothing/hat_1.jpg",
+     "stimuli/clothing/necklace_1.jpg", "stimuli/clothing/pants_1.jpg",
+     "stimuli/clothing/scarf_1.jpg",    "stimuli/clothing/shirt_1.jpg",
+     "stimuli/clothing/shorts_1.jpg",   "stimuli/clothing/sock_1.jpg",
+     "stimuli/clothing/sweater_1.jpg",  "stimuli/clothing/boot_1.jpg",
+     "stimuli/clothing/shoe_1.jpg",     "stimuli/clothing/coat_1.jpg"],
+    ["stimuli/clothing/dress_2.jpg",    "stimuli/clothing/hat_2.jpg",
+     "stimuli/clothing/necklace_2.jpg", "stimuli/clothing/pants_2.jpg",
+     "stimuli/clothing/scarf_2.jpg",    "stimuli/clothing/shirt_2.jpg",
+     "stimuli/clothing/shorts_2.jpg",   "stimuli/clothing/sock_2.jpg",
+     "stimuli/clothing/sweater_2.jpg",  "stimuli/clothing/boot_2.jpg",
+     "stimuli/clothing/shoe_2.jpg",     "stimuli/clothing/coat_2.jpg"]
+  ],
+  household_items: [
+    ["stimuli/household_items/bed_1.jpg",          "stimuli/household_items/bowl_1.jpg",
+     "stimuli/household_items/camera1_1.jpg",      "stimuli/household_items/chair_1.jpg",
+     "stimuli/household_items/clock_1.jpg",        "stimuli/household_items/plate_1.jpg",
+     "stimuli/household_items/refrigerator_1.jpg", "stimuli/household_items/lamp_1.jpg",
+     "stimuli/household_items/scissors_1.jpg",     "stimuli/household_items/vacuum_1.jpg",
+     "stimuli/household_items/tape_1.jpg",         "stimuli/household_items/pillow_1.jpg"],
+    ["stimuli/household_items/bed_2.jpg",          "stimuli/household_items/bowl_2.jpg",
+     "stimuli/household_items/camera1_2.jpg",      "stimuli/household_items/chair_2.jpg",
+     "stimuli/household_items/clock_2.jpg",        "stimuli/household_items/plate_2.jpg",
+     "stimuli/household_items/refrigerator_2.jpg", "stimuli/household_items/lamp_2.jpg",
+     "stimuli/household_items/scissors_2.jpg",     "stimuli/household_items/vacuum_2.jpg",
+     "stimuli/household_items/tape_2.jpg",         "stimuli/household_items/pillow_2.jpg"]
   ]
 };
 
-const SET_CONDITIONS = [
-  { animal: 0, plant: 0, artifact: 0 },
-  { animal: 0, plant: 0, artifact: 1 },
-  { animal: 0, plant: 1, artifact: 0 },
-  { animal: 0, plant: 1, artifact: 1 },
-  { animal: 1, plant: 0, artifact: 0 },
-  { animal: 1, plant: 0, artifact: 1 },
-  { animal: 1, plant: 1, artifact: 0 },
-  { animal: 1, plant: 1, artifact: 1 }
+/* ---------- 3-category subsets ----------
+   Each child sees exactly one of these six sets (three categories).
+   Labels match the design table:
+       1a  animals / plants   / clothing
+       1b  vehicles / emotions / household
+       2a  animals / household / emotions
+       2b  vehicles / plants   / clothing
+       3a  animals / emotions  / clothing
+       3b  vehicles / plants   / household
+   Every category appears in exactly 3 of the 6 sets, so each category is
+   collected from 1/2 of the sample.                                       */
+
+const CATEGORY_SETS = [
+  { label: "1a", categories: ["animals", "plants",          "clothing"]        },
+  { label: "1b", categories: ["vehicle", "emotions",        "household_items"] },
+  { label: "2a", categories: ["animals", "household_items", "emotions"]        },
+  { label: "2b", categories: ["vehicle", "plants",          "clothing"]        },
+  { label: "3a", categories: ["animals", "emotions",        "clothing"]        },
+  { label: "3b", categories: ["vehicle", "plants",          "household_items"] }
 ];
+
+/* version 1–12 maps onto  (6 category sets) x (2 image-set orders)
+     setIndex           = (version - 1) % 6     -> which 3 categories
+     useReverseSetOrder = version > 6           -> picture set 2 first
+
+   Within a version the ORDER of the three categories is shuffled fresh for
+   each child; the picture-set order is a single decision applied to all
+   three categories (animal 1, plant 1, clothing 1 all come first, or all
+   second), which is what `useReverseSetOrder` encodes.                    */
+
+function getVersionAssignment(version) {
+  const setIndex = (version - 1) % 6;
+  return {
+    setIndex:           setIndex,
+    setLabel:           CATEGORY_SETS[setIndex].label,
+    categories:         CATEGORY_SETS[setIndex].categories,
+    useReverseSetOrder: version > 6
+  };
+}
 
 /* ---------- fixed stage ---------- */
 
@@ -873,26 +944,28 @@ const participant_info_trial = {
 
       /* ---------- BUILD COUNTERBALANCE AFTER VERSION ENTERED ---------- */
 
-      const CATEGORY_ORDERS = [
-        ["animals","emotions","plants"],
-        ["animals","plants","emotions"],
-        ["emotions","animals","plants"],
-        ["emotions","plants","animals"],
-        ["plants","animals","emotions"],
-        ["plants","emotions","animals"]
-      ];
+      /* The version fixes (a) which three categories this child gets and
+         (b) whether picture set 1 or set 2 comes first. The ORDER of the
+         three categories is then randomized for this child. */
+
+      const assignment = getVersionAssignment(version);
+
+      window.CATEGORY_SET_LABEL = assignment.setLabel;
+
+      useReverseSetOrder = assignment.useReverseSetOrder;
 
       randomizedCategoryOrder =
-        CATEGORY_ORDERS[(version - 1) % 6];
-
-      useReverseSetOrder = version > 6;
+        jsPsychInstance.randomization.shuffle([...assignment.categories]);
 
       MAIN_BLOCKS = [];
 
-      randomizedCategoryOrder.forEach(category => {
+      /* One picture-set decision for the whole session: if set 2 comes
+         first, it comes first for every category (animal 2, plant 2,
+         clothing 2 all appear in trial 1 of their block). */
+      const firstSetIndex  = useReverseSetOrder ? 1 : 0;
+      const secondSetIndex = useReverseSetOrder ? 0 : 1;
 
-        const firstSetIndex = useReverseSetOrder ? 1 : 0;
-        const secondSetIndex = useReverseSetOrder ? 0 : 1;
+      randomizedCategoryOrder.forEach(category => {
 
         const firstImages = CATEGORIES[category][firstSetIndex];
         const secondImages = CATEGORIES[category][secondSetIndex];
@@ -904,6 +977,16 @@ const participant_info_trial = {
 
         MAIN_BLOCKS.push(blockTrials);
       });
+
+      /* Only the three assigned categories need preloading (72 pictures
+         instead of all 144), which keeps the wait short. */
+      window.PRELOAD_IMAGES = [
+        ...randomizedCategoryOrder.flatMap(c => CATEGORIES[c].flat()),
+        ...BALLOON_IMAGES,
+        ...MINI_PRACTICE_IMAGES,
+        ...MINI_PRACTICE_IMAGES_2,
+        ...STATIC_IMAGES
+      ];
 
       /* ---------- BUILD MAIN TIMELINE NOW THAT MAIN_BLOCKS EXISTS ---------- */
 
@@ -938,7 +1021,14 @@ const participant_info_trial = {
             total_trials: TOTAL_MAIN_TRIALS,
             total_trials_in_block: TRIALS_PER_BLOCK,
             images: shuffledImages,
-            image_order: shuffledImages
+            image_order: shuffledImages,
+            /* which category and which picture set this trial used -
+               worth recording now that the three categories differ
+               from child to child */
+            data: {
+              category:    randomizedCategoryOrder[b],
+              picture_set: (t === 0 ? firstSetIndex : secondSetIndex) + 1
+            }
           });
 
           timeline.push(attention_star_page);
@@ -953,8 +1043,11 @@ const participant_info_trial = {
       }
 
       jsPsychInstance.data.addProperties({
-        participant_id: pid,
-        version: version
+        participant_id:  pid,
+        version:         version,
+        category_set:    assignment.setLabel,                   // 1a, 1b, 2a, ...
+        category_order:  randomizedCategoryOrder.join(","),     // order actually run
+        set_condition:   useReverseSetOrder ? 2 : 1             // 1 = set1 first, 2 = set2 first
       });
 
       timeline.push(save_data);
@@ -974,13 +1067,18 @@ const STATIC_IMAGES = [
 
 const preload_trial = {
   type: jsPsychPreload,
-  images: [
-    ...Object.values(CATEGORIES).flat(2),
-    ...BALLOON_IMAGES,
-    ...MINI_PRACTICE_IMAGES,
-    ...MINI_PRACTICE_IMAGES_2,
-    ...STATIC_IMAGES
-  ],
+  /* Dynamic parameter: evaluated when the trial starts, i.e. after the
+     version has been entered, so only this child's three categories load.
+     Falls back to everything if the assignment somehow didn't run. */
+  images: function() {
+    return window.PRELOAD_IMAGES || [
+      ...Object.values(CATEGORIES).flat(2),
+      ...BALLOON_IMAGES,
+      ...MINI_PRACTICE_IMAGES,
+      ...MINI_PRACTICE_IMAGES_2,
+      ...STATIC_IMAGES
+    ];
+  },
   show_detailed_errors: true,   // surface any load failures
   continue_after_error: false,  // halt so you can see what failed
   max_load_time: 60000          // 60s budget (default is unlimited)
