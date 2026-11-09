@@ -1,0 +1,2107 @@
+---
+title: "Kids Semantic Network — Pilot Analysis"
+format: html
+editor: visual
+---
+
+# Setup
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(jsonlite)
+library(here)
+library(mclust)
+library(broom)
+library(lme4)
+library(lmerTest)
+library(dendextend)
+library(ggcorrplot)
+
+# Avoid masking by plyr/etc.
+suppressMessages({
+  library(conflicted)
+  conflicts_prefer(
+    dplyr::filter, dplyr::select, dplyr::mutate, dplyr::summarise,
+    dplyr::count, dplyr::arrange, dplyr::slice, dplyr::rename, purrr::map,
+    here::here,
+    .quiet = TRUE
+  )
+})
+
+# Base data path
+base_path <- here("..", "data")
+```
+
+# Shared helpers
+
+Two versions (grid, free-sort) share the same downstream logic — only the position-field names differ.
+
+```{r}
+#Extract final placement positions from grid version
+extract_final_placements <- function(row, x_field, y_field,
+                                     source_col = "move_log") {
+
+  raw <- row[[source_col]]
+  if (is.na(raw) || raw == "[]") return(NULL)
+
+  parsed <- tryCatch(fromJSON(raw), error = function(e) NULL)
+  if (is.null(parsed) || !is.data.frame(parsed)) return(NULL)
+
+  if (!all(c(x_field, y_field) %in% names(parsed))) return(NULL)
+
+  img_col <- if ("image_name" %in% names(parsed)) "image_name"
+             else if ("image" %in% names(parsed)) "image"
+             else return(NULL)
+
+  parsed$posX <- suppressWarnings(as.numeric(parsed[[x_field]]))
+  parsed$posY <- suppressWarnings(as.numeric(parsed[[y_field]]))
+
+  # Only relevant for move_log (history) — no-op for placements (already final)
+  if ("timestamp" %in% names(parsed)) {
+    parsed <- parsed %>%
+      mutate(timestamp = suppressWarnings(as.numeric(timestamp))) %>%
+      group_by(.data[[img_col]]) %>%
+      arrange(timestamp) %>%
+      slice_tail(n = 1) %>%
+      ungroup()
+  }
+
+  parsed %>%
+    transmute(
+      participant_id = row$participant_id,
+      block          = suppressWarnings(as.numeric(row$block)),
+      trial          = suppressWarnings(as.numeric(row$trial)),
+      image_name     = .data[[img_col]],
+      posX, posY
+    )
+}
+```
+
+```{r}
+# Tag category / base_name / set from image filename.
+# Image filenames look like "happy_1.png", "horse_2.jpg", etc.
+tag_categories <- function(df) {
+  df %>%
+    mutate(
+      image_stem = str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+      base_name  = str_remove(image_stem,  "_\\d+$"),
+      set        = str_extract(image_stem, "\\d+$") %>% as.integer(),
+      category   = case_when(
+        str_detect(base_name,
+                   "happy|sad|angry|fearful|surprise|disgust") ~ "emotions",
+        str_detect(base_name,
+                   "horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin") ~ "animals",
+        str_detect(base_name,
+                   "tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut") ~ "plants"
+      )
+    )
+}
+```
+
+```{r}
+# Normalize "p###" participant IDs from raw column.
+normalize_pid <- function(x) {
+  str_extract(as.character(x), "\\d+") %>%
+    str_pad(width = 3, pad = "0") %>%
+    str_c("p", .)
+}
+
+# Load all CSVs from a folder, normalize IDs.
+load_folder <- function(folder) {
+  list.files(folder, pattern = "\\.csv$", full.names = TRUE) %>%
+    map_dfr(~ read_csv(.x, col_types = cols(.default = "c"))) %>%
+    mutate(participant_id = normalize_pid(participant_id))
+}
+
+# Build final_placements.
+build_placements <- function(folder, trial_type_label, x_field, y_field,
+                             source_col = "move_log") {
+  all_data <- load_folder(folder)
+
+  trials <- all_data %>%
+    filter(trial_type == trial_type_label,
+           !is.na(block), block != "null")
+
+  if (nrow(trials) == 0) {
+    stop("No rows matched trial_type == '", trial_type_label,
+         "'. trial_type values present: ",
+         paste(unique(all_data$trial_type), collapse = ", "))
+  }
+
+  out <- trials %>%
+    split(seq_len(nrow(.))) %>%
+    map_dfr(~ extract_final_placements(.x, x_field, y_field, source_col))
+
+  if (nrow(out) == 0) {
+    stop("Extraction returned 0 placements from '", source_col, "'. ",
+         "Check x_field/y_field ('", x_field, "', '", y_field,
+         "') against the JSON keys in that column.")
+  }
+
+  out %>%
+    mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+    filter(!is.na(trial), trial > 0) %>%
+    tag_categories()
+}
+```
+
+```{r}
+# Add age_group label from an `age` column.
+# Use after joining age_df so you don't have to repeat the case_when each time.
+add_age_group <- function(df) {
+  df %>%
+    mutate(age_group = case_when(
+      age <  5 ~ "4",
+      age <  6 ~ "5",
+      age <  7 ~ "6",
+      age <  8 ~ "7",
+      age >= 8 ~ "8"
+    ))
+}
+```
+
+```{r}
+# Pairwise-distance vector from a set of coords, sorted by base_name
+compute_dist_vec <- function(df) {
+  coords <- df %>%
+    arrange(base_name) %>%
+    select(posX, posY) %>%
+    as.matrix()
+  as.vector(dist(coords))
+}
+```
+
+```{r}
+# Test-retest consistency per (participant, category).
+#
+# For each trial, average duplicate-emotion picture positions to one
+# point per concept (no-op for animal/plant since they have 1 pic/concept).
+# Then correlate trial 1 vs trial 2 distance vectors.
+#
+# Returns one row per (participant_id, category) with column `consistency`.
+compute_consistency <- function(final_placements) {
+
+  trial_positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+
+  trial_dist <- trial_positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dist_vec = map(data, compute_dist_vec)) %>%
+    select(-data)
+
+  trial_dist %>%
+    group_by(participant_id, category) %>%
+    summarise(
+      consistency = if (length(dist_vec) < 2) NA_real_
+                    else cor(dist_vec[[1]], dist_vec[[2]],
+                             use = "complete.obs"),
+      n_trials    = length(dist_vec),
+      .groups     = "drop"
+    )
+}
+```
+
+```{r}
+# Emotions-only: within-trial duplicate clustering.
+# Within each emotion trial, correlate set-1 vs set-2 distance vectors,
+# then average across the participant's emotion trials.
+compute_within_trial <- function(final_placements) {
+  final_placements %>%
+    filter(category == "emotions") %>%
+    group_by(participant_id, trial, set) %>%
+    nest() %>%
+    mutate(dist_vec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, trial) %>%
+    summarise(
+      within_cor = if (length(dist_vec) < 2) NA_real_
+                   else cor(dist_vec[[1]], dist_vec[[2]],
+                            use = "complete.obs"),
+      .groups = "drop"
+    ) %>%
+    group_by(participant_id) %>%
+    summarise(
+      within_trial_consistency = mean(within_cor, na.rm = TRUE),
+      n_trials = sum(!is.na(within_cor)),
+      .groups = "drop"
+    )
+}
+```
+
+```{r}
+# Cluster the concepts in one trial, return cluster labels in base_name order.
+cluster_trial <- function(df, k) {
+  coords <- df %>% arrange(base_name) %>% select(posX, posY) %>% as.matrix()
+  hc <- hclust(dist(coords), method = "ward.D2")
+  cutree(hc, k = k)
+}
+
+# Cluster-based consistency: ARI between trial 1 and trial 2 cluster labels.
+compute_cluster_consistency <- function(final_placements, k = 3) {
+
+  trial_positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+
+  trial_clusters <- trial_positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(cluster = map(data, ~ cluster_trial(.x, k = k))) %>%
+    select(-data)
+
+  trial_clusters %>%
+    group_by(participant_id, category) %>%
+    summarise(
+      cluster_consistency = if (length(cluster) < 2) NA_real_
+                            else mclust::adjustedRandIndex(cluster[[1]],
+                                                          cluster[[2]]),
+      n_trials = length(cluster),
+      .groups = "drop"
+    )
+}
+```
+
+# Grid version
+
+```{r}
+#| message: false
+# Grid cell size in pixels (from the experiment: CELL_SIZE = 104, square cells).
+GRID_CELL_SIZE <- 104
+
+final_placements_grid <- build_placements(
+  folder           = file.path(base_path, "grid_sort"),
+  trial_type_label = "emotion-grid",
+  x_field          = "grid_col",
+  y_field          = "grid_row"
+) %>%
+  # Convert grid_col/grid_row to pixel cell-centers, matching the posX/posY
+  # recorded in the data (posX = 104*col + 8, posY = 104*row). We compute from
+  # grid_col/grid_row because every grid file has those, whereas only some
+  # versions store posX/posY directly; the values are identical either way.
+  mutate(
+    posX = posX * GRID_CELL_SIZE + 8,
+    posY = posY * GRID_CELL_SIZE
+  )
+```
+
+```{r}
+# Sanity check: each participant × category should have 2 trials,
+# and within each trial each base_name should appear the expected # of times.
+final_placements_grid %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name),
+            n_images   = n(), .groups = "drop") %>%
+  count(category, n_concepts, n_images)
+```
+
+```{r}
+write_csv(final_placements_grid, "final_placements_grid.csv")
+```
+
+# Free-sort version
+
+```{r}
+#| message: false
+final_placements_free <- build_placements(
+  folder           = file.path(base_path, "free_sort"),
+  trial_type_label = "emotion-grid",   # same as grid — distinguished by folder
+  x_field          = "posX",
+  y_field          = "posY",
+  source_col       = "placements"
+)
+```
+
+```{r}
+final_placements_free %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name),
+            n_images   = n(), .groups = "drop") %>%
+  count(category, n_concepts, n_images)
+```
+
+```{r}
+write_csv(final_placements_free, "final_placements_free.csv")
+```
+
+# Consistency: both versions
+
+```{r}
+consistency_grid <- compute_consistency(final_placements_grid) %>%
+  mutate(version = "grid")
+
+consistency_free <- compute_consistency(final_placements_free) %>%
+  mutate(version = "free")
+
+consistency_all <- bind_rows(consistency_grid, consistency_free)
+consistency_all
+```
+
+```{r}
+within_trial_grid <- compute_within_trial(final_placements_grid) %>%
+  mutate(version = "grid")
+
+within_trial_free <- compute_within_trial(final_placements_free) %>%
+  mutate(version = "free")
+
+within_trial_all <- bind_rows(within_trial_grid, within_trial_free)
+within_trial_all
+```
+
+# Add age and age group
+
+```{r}
+#| message: false
+age_df <- read_csv("age_sheet.csv") %>%
+  select(participant_id, age) %>%           # drop the empty ...3 / ...4
+  mutate(participant_id = as.character(participant_id))
+
+consistency_all <- consistency_all %>%
+  select(-any_of(c("age", "age_group", "...3", "...4"))) %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+```
+
+# Summary table
+
+```{r}
+consistency_summary_by_category_age <- consistency_all %>%
+  group_by(version, age_group, category) %>%
+  summarise(
+    mean_consistency = mean(consistency, na.rm = TRUE),
+    sd_consistency   = sd(consistency,   na.rm = TRUE),
+    n                = sum(!is.na(consistency)),
+    .groups          = "drop"
+  )
+
+consistency_summary_by_category_age
+
+consistency_summary <- consistency_all %>%
+  group_by(category) %>%
+  summarise(
+    mean_consistency = mean(consistency, na.rm = TRUE),
+    sd_consistency   = sd(consistency,   na.rm = TRUE),
+    n                = sum(!is.na(consistency)),
+    # compute 95% CI
+    ci_consistency = qt(0.975, n-1)*sd_consistency/sqrt(n),
+    lower_ci = mean_consistency - ci_consistency,
+    upper_ci = mean_consistency + ci_consistency
+  )
+
+consistency_summary
+
+#age model
+m <- lmerTest::lmer(consistency ~ age+(1|participant_id), data = consistency_all)
+summary(m)
+```
+
+# Plot
+
+```{r}
+ggplot(consistency_all %>% filter(!is.na(age_group)),
+       aes(x = age_group, y = consistency, fill = category)) +
+  geom_boxplot() +
+  facet_wrap(~ version) +
+  theme_minimal() +
+  labs(
+    x     = "Age Group",
+    y     = "Consistency (test-retest correlation)",
+    title = "Semantic Arrangement Consistency by Age Group",
+    subtitle = "Grid vs. Free-sort task versions"
+  )
+```
+
+# Cluster-based Consistency
+
+```{r}
+# Compute cluster consistency for the grid version, join age, summarise.
+cluster_consistency_grid <- compute_cluster_consistency(
+  final_placements_grid, k = 3
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+cluster_summary_grid <- cluster_consistency_grid %>%
+  group_by(age_group, category) %>%
+  summarise(
+    mean_ari = mean(cluster_consistency, na.rm = TRUE),
+    sd_ari   = sd(cluster_consistency,   na.rm = TRUE),
+    n        = sum(!is.na(cluster_consistency)),
+    .groups  = "drop"
+  )
+
+cluster_summary_grid
+```
+
+```{r}
+# Compute cluster consistency for the free-sort version, join age, summarise.
+cluster_consistency_free <- compute_cluster_consistency(
+  final_placements_free, k = 3
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+cluster_summary_free <- cluster_consistency_free %>%
+  group_by(age_group, category) %>%
+  summarise(
+    mean_ari = mean(cluster_consistency, na.rm = TRUE),
+    sd_ari   = sd(cluster_consistency,   na.rm = TRUE),
+    n        = sum(!is.na(cluster_consistency)),
+    .groups  = "drop"
+  )
+
+cluster_summary_free
+```
+
+# Compare to predefined sub-categories
+
+```{r}
+# Predefine sub-categories within each domain.
+subcategories <- tribble(
+  ~base_name,   ~subcategory,
+  # Emotions: valence
+  "happy",      "positive",   "surprise", "positive",
+  "sad",        "negative",   "angry",    "negative",
+  "fearful",    "negative",   "disgust",  "negative",
+  # Animals: 
+  "horse",      "herbivore", "lion",    "carnivore",
+  "wolf",       "carnivore", "squirrel","herbivore",
+  "sheep",      "herbivore", "fox",     "carnivore",
+  "dolphin",    "aquatic",     "fish",    "aquatic",
+  "peacock",    "bird",        "pigeon",  "bird",
+  "butterfly",  "insect",      "ladybug", "insect",
+  # Plants: 
+  "apple",      "fruit",   "blueberry", "fruit",
+  "cherry",     "fruit",   "peanut",    "nut",
+  "broccoli",   "vegetable",   "cabbage",   "vegetable",
+  "tree",       "nature","flower",    "nature",
+  "grass",      "nature","leaf",      "nature",
+  "acorn",      "nut","cactus",    "nature"
+)
+
+compute_cat_org <- function(final_placements, subcategories) {
+
+  positions <- final_placements %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    left_join(subcategories, by = "base_name")
+
+  ratio_one_trial <- function(df) {
+    if (n_distinct(df$subcategory) < 2) return(NA_real_)
+    d <- as.matrix(dist(as.matrix(df %>% select(posX, posY))))
+    same <- outer(df$subcategory, df$subcategory, "==")
+    diag(same) <- NA
+    within  <- mean(d[same == TRUE],  na.rm = TRUE)
+    between <- mean(d[same == FALSE], na.rm = TRUE)
+    between / within
+  }
+
+  positions %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(cat_org = map_dbl(data, ratio_one_trial)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop")
+}
+```
+
+```{r}
+#Between/within sub-category ratio for grid version
+cat_org_grid_collapsed <- compute_cat_org(final_placements_grid, subcategories) %>%
+  group_by(participant_id) %>%
+  summarise(cat_org = mean(cat_org, na.rm = TRUE), .groups = "drop") %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+cat_org_grid_collapsed %>%
+  group_by(age_group) %>%
+  summarise(
+    mean_ratio = mean(cat_org, na.rm = TRUE),
+    sd_ratio   = sd(cat_org,   na.rm = TRUE),
+    n          = sum(!is.na(cat_org)),
+    .groups    = "drop"
+  )
+```
+
+```{r}
+#Between/within sub-category ratio for free sorting version
+cat_org_free <- compute_cat_org(final_placements_free, subcategories) %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+cat_org_free %>%
+  group_by(age_group, category) %>%
+  summarise(mean_ratio = mean(cat_org, na.rm = TRUE),
+            sd_ratio   = sd(cat_org,   na.rm = TRUE),
+            n          = sum(!is.na(cat_org)),
+            .groups    = "drop")
+```
+
+```{r}
+#summary table
+all_measures_grid <- compute_consistency(final_placements_grid) %>%
+  rename(distance = consistency) %>%
+  left_join(
+    compute_cluster_consistency(final_placements_grid, k = 3) %>%
+      rename(ari = cluster_consistency) %>%
+      select(participant_id, category, ari),
+    by = c("participant_id", "category")
+  ) %>%
+  left_join(
+    compute_cat_org(final_placements_grid, subcategories) %>%
+      rename(ratio = cat_org),
+    by = c("participant_id", "category")
+  ) %>%
+  group_by(participant_id) %>%
+  summarise(
+    distance = mean(distance, na.rm = TRUE),
+    ari      = mean(ari,      na.rm = TRUE),
+    ratio    = mean(ratio,    na.rm = TRUE),
+    .groups  = "drop"
+  ) %>%
+  left_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+all_measures_grid %>%
+  group_by(age_group) %>%
+  summarise(
+    n              = sum(!is.na(distance)),
+    mean_distance  = mean(distance, na.rm = TRUE),
+    sd_distance    = sd(distance,   na.rm = TRUE),
+    mean_ari       = mean(ari,      na.rm = TRUE),
+    sd_ari         = sd(ari,        na.rm = TRUE),
+    mean_ratio     = mean(ratio,    na.rm = TRUE),
+    sd_ratio       = sd(ratio,      na.rm = TRUE),
+    .groups        = "drop"
+  )
+```
+
+```{r}
+#Between/within sub-category ratio vs age correlation
+ratio_by_age <- compute_cat_org(final_placements_grid, subcategories) %>%
+  left_join(age_df, by = "participant_id") %>%
+  filter(!is.na(age), !is.na(cat_org)) %>%
+  group_by(category) %>%
+  nest() %>%
+  mutate(
+    model  = map(data, ~ lm(cat_org ~ age, data = .x)),
+    tidied = map(model, broom::tidy)
+  ) %>%
+  unnest(tidied) %>%
+  filter(term == "age") %>%
+  select(category, estimate, std.error, statistic, p.value)
+
+ratio_by_age
+```
+
+```{r}
+#consistency vs age
+distance_one_number <- consistency_grid %>%
+  left_join(age_df, by = "participant_id") %>%
+  group_by(participant_id, age) %>%
+  summarise(distance = mean(consistency, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(age), !is.na(distance))
+
+summary(lm(distance ~ age, data = distance_one_number))
+with(distance_one_number, cor.test(age, distance))
+```
+
+```{r}
+# Participants actually included in analyses = those with placements + a valid age
+included_participants <- bind_rows(
+  final_placements_grid %>% distinct(participant_id) %>% mutate(version = "grid"),
+  final_placements_free %>% distinct(participant_id) %>% mutate(version = "free")
+) %>%
+  left_join(age_df, by = "participant_id") %>%
+  filter(!is.na(age)) %>%
+  mutate(age_years = floor(age))   # 7.4 -> 7
+
+# Summary per version
+included_participants %>%
+  group_by(version) %>%
+  summarise(
+    n        = n(),
+    mean_age = round(mean(age_years), 2),
+    min_age  = min(age_years),
+    max_age  = max(age_years),
+    .groups  = "drop"
+  )
+
+# Count at each whole-year age
+included_participants %>%
+  count(version, age_years) %>%
+  arrange(version, age_years)
+```
+
+```{r}
+ggplot(included_participants, aes(x = factor(age_years), fill = version)) +
+  geom_bar() +
+  facet_wrap(~ version) +
+  theme_minimal() +
+  labs(
+    x = "Age (years)",
+    y = "Number of participants",
+    title = "Age distribution of included participants",
+    fill = "Version"
+  )
+```
+
+```{r}
+participant_pairwise_long <- function(fp, normalize = FALSE) {
+  out <- fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    group_by(participant_id, category, trial) %>%
+    group_modify(function(d, key) {
+      d <- d %>% arrange(base_name)
+      m <- as.matrix(dist(as.matrix(d[, c("posX", "posY")])))
+      dimnames(m) <- list(d$base_name, d$base_name)
+      as.data.frame(as.table(m)) %>%
+        transmute(item1 = as.character(Var1),
+                  item2 = as.character(Var2),
+                  dist  = Freq) %>%
+        filter(item1 < item2)
+    }) %>%
+    ungroup() %>%
+    group_by(participant_id, category, item1, item2) %>%
+    summarise(dist = mean(dist), .groups = "drop")   # average across trials
+
+  if (normalize) {
+    out <- out %>%
+      group_by(participant_id, category) %>%
+      mutate(dist = dist / mean(dist, na.rm = TRUE)) %>%
+      ungroup()
+  }
+  out
+}
+
+# Average across subjects within each (category, age_group) -> long format.
+avg_dist_long_byGroup <- function(fp, age_df, normalize = FALSE) {
+  participant_pairwise_long(fp, normalize = normalize) %>%
+    left_join(age_df, by = "participant_id") %>%
+    add_age_group() %>%
+    filter(!is.na(age_group)) %>%
+    group_by(category, age_group, item1, item2) %>%
+    summarise(avg_dist = mean(dist), .groups = "drop")
+}
+
+# Long -> dist object (reimplements the paper's long_to_dist).
+long_to_dist <- function(d) {
+  items <- sort(unique(c(d$item1, d$item2)))
+  m <- matrix(0, length(items), length(items), dimnames = list(items, items))
+  m[cbind(match(d$item1, items), match(d$item2, items))] <- d$avg_dist
+  m[cbind(match(d$item2, items), match(d$item1, items))] <- d$avg_dist
+  as.dist(m)
+}
+```
+
+```{r}
+# Build cluster objects per (version, category, age_group).
+build_clusters <- function(fp, age_df, version_label, normalize = FALSE) {
+  avg_dist_long_byGroup(fp, age_df, normalize = normalize) %>%
+    group_by(category, age_group) %>%
+    nest() %>%
+    mutate(
+      n_concepts = map_int(data, ~ length(unique(c(.x$item1, .x$item2)))),
+      dist_obj   = map(data, long_to_dist),
+      cluster    = map(dist_obj, ~ hclust(.x, method = "ward.D2")),
+      dend       = map(cluster, as.dendrogram),
+      cut3       = map(cluster, ~ cutree(.x, k = 3))
+    ) %>%
+    ungroup() %>%
+    mutate(version = version_label)
+}
+
+clusters_all <- bind_rows(
+  build_clusters(final_placements_grid, age_df, "grid", normalize = TRUE),
+  build_clusters(final_placements_free, age_df, "free", normalize = TRUE)
+)
+
+clusters_all %>% select(version, category, age_group, n_concepts)
+```
+
+```{r}
+# Dendrograms: one panel per (category x age group) per version.
+plot_dendros <- function(clusters_df, version_label, k = 4) {
+  sub <- clusters_df %>% 
+    filter(version == version_label) %>%
+    arrange(category, age_group)
+  
+  if (nrow(sub) == 0) return(invisible(NULL))
+  
+  op <- par(mfrow = c(3, 3), mar = c(2, 2, 3, 6))
+  on.exit(par(op))
+  
+  pwalk(
+    list(sub$cluster, sub$category, sub$age_group),
+    function(clst, cat, ag) {
+      dend <- as.dendrogram(clst)
+      
+      dend <- dend %>%
+        set("branches_lwd", 2) %>%
+        set("branches_k_color", value = c("#5102A3", "#B43359", "#F1731D", "#F6D442"), k = k)
+      
+      plot(
+        dend,
+        horiz = TRUE,
+        main = paste0(version_label, ": ", cat, ", ", ag)
+      )
+    }
+  )
+}
+plot_dendros(clusters_all, "grid")
+plot_dendros(clusters_all, "free")
+```
+
+```{r}
+# Correlation between age groups (cophenetic, like cor.dendlist),
+# one matrix per (version, category).
+age_group_dend_cor <- function(clusters_df, version_label, cat) {
+  sub <- clusters_df %>%
+    filter(version == version_label, category == cat) %>%
+    arrange(age_group)
+  if (nrow(sub) < 2) return(NULL)
+  dl <- do.call(dendlist, setNames(sub$dend, as.character(sub$age_group)))
+  cor.dendlist(dl)
+}
+
+plot_dend_cor <- function(clusters_df, version_label, cat) {
+  m <- tryCatch(age_group_dend_cor(clusters_df, version_label, cat),
+                error = function(e) NULL)
+  if (is.null(m)) {
+    message(version_label, " / ", cat,
+            ": skipped (mismatched leaves or <2 age groups)")
+    return(invisible(NULL))
+  }
+  print(
+    ggcorrplot(m, type = "lower", lab = TRUE, outline.color = "black",
+               ggtheme = ggplot2::theme_void()) +
+      ggtitle(paste0(version_label, " - ", cat))
+  )
+}
+
+for (v in c("grid", "free"))
+  for (cat in c("animals", "plants", "emotions"))
+    plot_dend_cor(clusters_all, v, cat)
+```
+
+```{r}
+participant_dist_vecs <- function(fp) {
+  fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop") %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dvec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(dvec = list(reduce(dvec, `+`) / length(dvec)), .groups = "drop")
+}
+
+between_subject_consistency <- function(fp, age_df) {
+  participant_dist_vecs(fp) %>%
+    left_join(age_df, by = "participant_id") %>%
+    add_age_group() %>%
+    filter(!is.na(age_group)) %>%
+    group_by(category, age_group) %>%
+    summarise(
+      between_consistency = {
+        v <- dvec
+        if (length(v) < 2) NA_real_
+        else mean(combn(length(v), 2, function(ix)
+          cor(v[[ix[1]]], v[[ix[2]]], use = "complete.obs")), na.rm = TRUE)
+      },
+      n = n(),
+      .groups = "drop"
+    )
+}
+
+between_subj_all <- bind_rows(
+  between_subject_consistency(final_placements_grid, age_df) %>% mutate(version = "grid"),
+  between_subject_consistency(final_placements_free, age_df) %>% mutate(version = "free")
+)
+between_subj_all
+```
+
+```{r}
+between_subj_all %>%
+  ggplot(aes(x = age_group, y = between_consistency, fill = category)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  facet_wrap(~ version) +
+  scale_fill_manual(
+    values = c(
+      "animals" = "#0F728B",
+      "emotions" =  "#29A099",
+      "plants" = "#EDEF5c"
+    )) +
+  theme_minimal() +
+  labs(
+    x = "Age Group",
+    y = "Between-subject consistency (mean pairwise r)",
+    title = "Between-subject agreement by age group and category"
+  )
+```
+
+# Comprehension Check
+
+Practice trial 2 shows five food images with an a priori two-group structure (toast / bread / croissant vs chocolate / candy). We use it to ask whether the child understood that distance encodes relatedness.
+
+**Criteria.** For each of four anchor items we look at its nearest neighbour:
+
+| Anchor    | Acceptable nearest neighbour |
+|-----------|------------------------------|
+| chocolate | croissant, candy             |
+| candy     | croissant, chocolate         |
+| bread     | toast, croissant             |
+| toast     | bread, croissant             |
+
+Croissant counts as acceptable for all four anchors, since it is genuinely ambiguous between the two groups (a bread by form, a sweet pastry by taste).
+
+-   **Level 1 (lenient)** — at least one of the four checks passes
+-   **Level 2 (strict)** — all four checks pass
+
+## Setup
+
+```{r}
+#| label: filter-setup
+AGE_MIN        <- 4
+AGE_MAX        <- 9      # exclusive
+PRACTICE_TRIAL <- -2
+
+GROUP_MAP <- c(toast = "bread", bread = "bread", croissant = "bread",
+               chocolate = "sweet", candy = "sweet")
+
+ACCEPTABLE <- list(
+  chocolate = c("croissant", "candy"),
+  candy     = c("croissant", "chocolate"),
+  bread     = c("toast", "croissant"),
+  toast     = c("bread", "croissant")
+)
+
+N_CHECKS <- length(ACCEPTABLE)
+```
+
+## Extract practice trial 2
+
+`build_placements()` cannot be reused here: it filters out `block == "null"` and keeps only `trial > 0`, and practice trials have a null block and `trial == -2`.
+
+```{r}
+#| label: practice-extract
+#| message: false
+practice_placements <- load_folder(file.path(base_path, "free_sort")) %>%
+  filter(trial_type == "emotion-grid") %>%
+  split(seq_len(nrow(.))) %>%
+  map_dfr(~ extract_final_placements(.x, "posX", "posY",
+                                     source_col = "placements")) %>%
+  mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+  filter(trial == PRACTICE_TRIAL) %>%
+  mutate(
+    image_stem = str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+    base_name  = str_remove(image_stem, "_\\d+$"),
+    group      = unname(GROUP_MAP[base_name])
+  )
+
+stopifnot(nrow(practice_placements) > 0)
+
+cat("Practice-2 rows:", nrow(practice_placements),
+    "from", n_distinct(practice_placements$participant_id), "children\n")
+
+# Every image should map to a group; NAs here mean GROUP_MAP needs fixing
+practice_placements %>% count(base_name, group)
+```
+
+## Restrict to ages 4–8
+
+```{r}
+#| label: filter-restrict
+pp <- practice_placements %>%
+  filter(!is.na(group)) %>%
+  inner_join(age_df %>% mutate(age_years = floor(age)), by = "participant_id") %>%
+  filter(age_years >= AGE_MIN, age_years < AGE_MAX)
+
+cat("Children in the 4-8 window:", n_distinct(pp$participant_id), "\n")
+
+# Images per child (all should be 5)
+pp %>% count(participant_id, name = "n_images") %>% count(n_images)
+```
+
+## Pairwise distances
+
+`distance_norm` divides by each child's own mean pairwise distance, which controls for children who used only a small part of the canvas.
+
+```{r}
+#| label: filter-distances
+pair_distances <- pp %>%
+  select(participant_id, age, age_years, base_name, posX, posY) %>%
+  group_by(participant_id) %>%
+  group_modify(~ {
+    d <- as.matrix(dist(cbind(.x$posX, .x$posY)))
+    dimnames(d) <- list(.x$base_name, .x$base_name)
+    as.data.frame(as.table(d)) %>%
+      rename(item_a = Var1, item_b = Var2, distance = Freq) %>%
+      filter(as.character(item_a) < as.character(item_b))
+  }) %>%
+  ungroup() %>%
+  left_join(pp %>% distinct(participant_id, age, age_years), by = "participant_id") %>%
+  mutate(
+    item_a    = as.character(item_a),
+    item_b    = as.character(item_b),
+    pair      = paste(item_a, item_b, sep = " - "),
+    pair_type = case_when(
+      GROUP_MAP[item_a] == "sweet" & GROUP_MAP[item_b] == "sweet" ~ "within sweets",
+      GROUP_MAP[item_a] == "bread" & GROUP_MAP[item_b] == "bread" ~ "within breads",
+      TRUE                                                        ~ "between groups"
+    )
+  ) %>%
+  group_by(participant_id) %>%
+  mutate(distance_norm = distance / mean(distance)) %>%
+  ungroup()
+
+head(pair_distances)
+```
+
+## Nearest neighbour of each anchor item
+
+```{r}
+#| label: filter-anchors
+long_dist <- bind_rows(
+  pair_distances %>% select(participant_id, from = item_a, to = item_b, distance),
+  pair_distances %>% select(participant_id, from = item_b, to = item_a, distance)
+)
+
+anchor_ranks <- long_dist %>%
+  filter(from %in% names(ACCEPTABLE)) %>%
+  group_by(participant_id, from) %>%
+  arrange(distance, .by_group = TRUE) %>%
+  summarise(
+    nearest      = first(to),
+    nearest_dist = round(first(distance), 1),
+    second       = nth(to, 2),
+    farthest     = last(to),
+    n_tied_min   = sum(distance == min(distance)),
+    .groups      = "drop"
+  ) %>%
+  rowwise() %>%
+  mutate(ok = nearest %in% ACCEPTABLE[[from]]) %>%
+  ungroup()
+
+if (any(anchor_ranks$n_tied_min > 1)) {
+  warning(sum(anchor_ranks$n_tied_min > 1),
+          " anchor(s) had tied nearest neighbours; the first was used.")
+}
+
+anchor_ranks
+```
+
+## Pass rate for each of the four checks
+
+```{r}
+#| label: filter-anchor-rates
+anchor_ranks %>%
+  group_by(anchor = from) %>%
+  summarise(n = n(),
+            n_ok   = sum(ok),
+            pct_ok = round(100 * mean(ok), 1),
+            .groups = "drop")
+```
+
+## Two levels
+
+```{r}
+#| label: filter-levels
+levels_tbl <- anchor_ranks %>%
+  select(participant_id, from, nearest, ok) %>%
+  pivot_wider(names_from  = from,
+              values_from = c(nearest, ok),
+              names_glue  = "{from}_{.value}") %>%
+  rowwise() %>%
+  mutate(n_ok = sum(c_across(ends_with("_ok")))) %>%
+  ungroup() %>%
+  mutate(
+    pass_L1 = n_ok >= 1,          # at least one check
+    pass_L2 = n_ok == N_CHECKS    # all four checks
+  ) %>%
+  left_join(pp %>% distinct(participant_id, age, age_years),
+            by = "participant_id")
+
+levels_tbl %>%
+  summarise(
+    n              = n(),
+    mean_n_ok      = round(mean(n_ok), 2),
+    L1_lenient_pct = round(100 * mean(pass_L1), 1),
+    L2_strict_pct  = round(100 * mean(pass_L2), 1)
+  )
+```
+
+```{r}
+#| label: apply-comprehension-filter
+MIN_CHECKS <- 3
+
+kids_keep <- levels_tbl %>% filter(n_ok >= MIN_CHECKS) %>% pull(participant_id)
+
+cat("Keeping", length(kids_keep), "of", nrow(levels_tbl),
+    "children (>=", MIN_CHECKS, "of 4 checks)\n")
+
+final_placements_free_f <- final_placements_free %>%
+  filter(participant_id %in% kids_keep)
+
+consistency_free_f <- consistency_all %>%
+  filter(version == "free", participant_id %in% kids_keep)
+```
+
+## How many of the four checks each child passes
+
+```{r}
+#| label: filter-ncheck-dist
+levels_tbl %>%
+  count(n_ok, name = "n_children") %>%
+  complete(n_ok = 0:N_CHECKS, fill = list(n_children = 0)) %>%
+  mutate(pct = round(100 * n_children / sum(n_children), 1))
+```
+
+```{r}
+#| label: filter-ncheck-cumulative
+# Passing AT LEAST k of the four
+tibble(at_least = 0:N_CHECKS) %>%
+  mutate(
+    n_children = map_int(at_least, ~ sum(levels_tbl$n_ok >= .x)),
+    pct        = round(100 * n_children / nrow(levels_tbl), 1),
+    level      = case_when(at_least == 1        ~ "L1 (lenient)",
+                           at_least == N_CHECKS ~ "L2 (strict)",
+                           TRUE                 ~ "")
+  )
+```
+
+## Pass rates by age
+
+If pass rates rise steeply with age, the criterion is partly measuring the developmental effect being studied.
+
+```{r}
+#| label: filter-pass-by-age
+levels_tbl %>%
+  group_by(age_years) %>%
+  summarise(
+    n          = n(),
+    mean_n_ok  = round(mean(n_ok), 2),
+    L1_lenient = round(100 * mean(pass_L1), 1),
+    at_least_2 = round(100 * mean(n_ok >= 2), 1),
+    at_least_3 = round(100 * mean(n_ok >= 3), 1),
+    L2_strict  = round(100 * mean(pass_L2), 1),
+    .groups    = "drop"
+  )
+```
+
+```{r}
+#| label: filter-ncheck-by-age
+# Full distribution of n_ok within each age (counts and row percentages)
+levels_tbl %>%
+  count(age_years, n_ok) %>%
+  complete(age_years, n_ok = 0:N_CHECKS, fill = list(n = 0)) %>%
+  group_by(age_years) %>%
+  mutate(pct = round(100 * n / sum(n), 1)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = n_ok, values_from = c(n, pct),
+              names_glue = "n_ok{n_ok}_{.value}")
+```
+
+```{r}
+#| label: filter-ncheck-plot
+#| fig-width: 8
+#| fig-height: 4.5
+levels_tbl %>%
+  count(age_years, n_ok) %>%
+  group_by(age_years) %>%
+  mutate(pct = 100 * n / sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x = factor(age_years), y = pct, fill = factor(n_ok))) +
+  geom_col() +
+  scale_fill_brewer(palette = "RdYlBu", name = "checks\npassed") +
+  theme_minimal() +
+  labs(title = "How many of the four grouping checks children pass",
+       x = "Age (years)", y = "% of children")
+```
+
+## Children who fail Level 1
+
+These children passed **none** of the four checks — every anchor's nearest neighbour came from the other group.
+
+```{r}
+#| label: filter-failures
+failures <- levels_tbl %>%
+  filter(!pass_L1) %>%
+  select(participant_id, age, age_years, n_ok, ends_with("_nearest")) %>%
+  arrange(age)
+
+cat("Failing Level 1 (0 of", N_CHECKS, "checks):", nrow(failures),
+    "of", nrow(levels_tbl), "children\n\n")
+failures
+```
+
+```{r}
+#| label: filter-failures-detail
+# Full distance profile for each failing child, nearest pair first.
+# Worth eyeballing before excluding anyone.
+if (nrow(failures) > 0) {
+  pair_distances %>%
+    semi_join(failures, by = "participant_id") %>%
+    select(participant_id, age_years, pair, pair_type, distance) %>%
+    mutate(distance = round(distance, 1)) %>%
+    arrange(participant_id, distance) %>%
+    print(n = Inf)
+} else {
+  cat("No children failed Level 1.\n")
+}
+```
+
+## Children failing Level 2 only
+
+Passed at least one check but not all four.
+
+```{r}
+#| label: filter-failures-l2
+levels_tbl %>%
+  filter(pass_L1, !pass_L2) %>%
+  select(participant_id, age, age_years, n_ok,
+         ends_with("_nearest"), ends_with("_ok")) %>%
+  arrange(n_ok, age)
+```
+
+## Participants - graded passing rate
+
+```{r}
+#| label: filter-ids-by-ncheck
+levels_tbl %>%
+  arrange(n_ok, age) %>%
+  group_by(n_ok) %>%
+  summarise(
+    n_children   = n(),
+    participants = paste(participant_id, collapse = ", "),
+    .groups      = "drop"
+  ) %>%
+  complete(n_ok = 0:N_CHECKS,
+           fill = list(n_children = 0, participants = "—"))
+```
+
+## Sensitivity: age effect under each level
+
+```{r}
+#| label: filter-sensitivity
+cons <- consistency_all %>%
+  filter(version == "free") %>%
+  semi_join(levels_tbl, by = "participant_id")
+
+fit_age <- function(dat, label) {
+  if (n_distinct(dat$participant_id) < 5) {
+    return(tibble(sample = label, n_children = n_distinct(dat$participant_id),
+                  slope = NA_real_, p_value = NA_real_, mean_cons = NA_real_))
+  }
+  m <- lm(consistency ~ age, data = dat)
+  tibble(sample     = label,
+         n_children = n_distinct(dat$participant_id),
+         slope      = round(coef(m)[["age"]], 4),
+         p_value    = round(summary(m)$coefficients["age", 4], 4),
+         mean_cons  = round(mean(dat$consistency, na.rm = TRUE), 3))
+}
+
+keep_atleast <- function(k) {
+  levels_tbl %>% filter(n_ok >= k) %>% pull(participant_id)
+}
+
+bind_rows(
+  fit_age(cons, "no filter"),
+  fit_age(cons %>% filter(participant_id %in% keep_atleast(1)), "L1: >=1 check"),
+  fit_age(cons %>% filter(participant_id %in% keep_atleast(2)), ">=2 checks"),
+  fit_age(cons %>% filter(participant_id %in% keep_atleast(3)), ">=3 checks"),
+  fit_age(cons %>% filter(participant_id %in% keep_atleast(4)), "L2: all 4 checks")
+)
+```
+
+# Pairwise distances by age
+
+## Summary table
+
+```{r}
+#| label: dist-summary
+pair_summary <- pair_distances %>%
+  group_by(age_years, pair, pair_type) %>%
+  summarise(
+    mean_dist = mean(distance),
+    se        = sd(distance) / sqrt(n()),
+    mean_norm = mean(distance_norm),
+    se_norm   = sd(distance_norm) / sqrt(n()),
+    n         = n(),
+    .groups   = "drop"
+  )
+
+pair_summary
+```
+
+## All 10 pairs, by age
+
+Within-group pairs should sit to the left of between-group pairs.
+
+```{r}
+#| label: dist-plot-pairs
+#| fig-width: 12
+#| fig-height: 5
+pair_summary %>%
+  mutate(pair = fct_reorder(pair, mean_dist)) %>%
+  ggplot(aes(x = mean_dist, y = pair, colour = pair_type)) +
+  geom_point(size = 2.5) +
+  geom_errorbarh(aes(xmin = mean_dist - se, xmax = mean_dist + se), height = 0.25) +
+  facet_wrap(~ age_years, nrow = 1) +
+  scale_colour_manual(values = c("within sweets"  = "#d62728",
+                                 "within breads"  = "#1f77b4",
+                                 "between groups" = "grey55")) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Practice 2: mean pairwise distance by age",
+       x = "Mean distance (px)", y = NULL, colour = NULL)
+```
+
+## Within vs between group, across age
+
+```{r}
+#| label: dist-plot-grouptype
+#| fig-width: 7
+#| fig-height: 5
+pair_distances %>%
+  group_by(age_years, pair_type) %>%
+  summarise(mean_norm = mean(distance_norm),
+            se = sd(distance_norm) / sqrt(n()), .groups = "drop") %>%
+  ggplot(aes(x = age_years, y = mean_norm, colour = pair_type, group = pair_type)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_norm - se, ymax = mean_norm + se), width = 0.12) +
+  geom_hline(yintercept = 1, linetype = "dotted") +
+  scale_colour_manual(values = c("within sweets"  = "#d62728",
+                                 "within breads"  = "#1f77b4",
+                                 "between groups" = "grey55")) +
+  theme_minimal() +
+  labs(title = "Within- vs between-group distance across age",
+       subtitle = "Normalised per child (1 = that child's mean pairwise distance)",
+       x = "Age (years)", y = "Normalised distance", colour = NULL)
+```
+
+## Distance matrix heatmap
+
+```{r}
+#| label: dist-plot-heatmap
+#| fig-width: 12
+#| fig-height: 4
+item_order <- c("toast", "bread", "croissant", "chocolate", "candy")
+
+bind_rows(
+  pair_distances %>% select(age_years, a = item_a, b = item_b, distance_norm),
+  pair_distances %>% select(age_years, a = item_b, b = item_a, distance_norm)
+) %>%
+  group_by(age_years, a, b) %>%
+  summarise(d = mean(distance_norm), .groups = "drop") %>%
+  mutate(a = factor(a, levels = item_order),
+         b = factor(b, levels = rev(item_order))) %>%
+  ggplot(aes(x = a, y = b, fill = d)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = round(d, 2)), size = 3) +
+  facet_wrap(~ age_years, nrow = 1) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08519c") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean normalised distance between items, by age",
+       x = NULL, y = NULL, fill = "distance")
+```
+
+## What each anchor's nearest neighbour actually was
+
+Watch for croissant here: because it is acceptable for all four anchors, a child who parks it in the middle of everything can pass checks without having separated the two groups.
+
+```{r}
+#| label: dist-plot-nearest
+#| fig-width: 11
+#| fig-height: 6
+anchor_ranks %>%
+  left_join(pp %>% distinct(participant_id, age_years), by = "participant_id") %>%
+  count(age_years, from, nearest, ok) %>%
+  ggplot(aes(x = nearest, y = n, fill = ok)) +
+  geom_col() +
+  facet_grid(from ~ age_years) +
+  scale_fill_manual(values = c("TRUE" = "#2b8cbe", "FALSE" = "#d62728"),
+                    name = "acceptable") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Nearest neighbour of each anchor item, by age",
+       x = NULL, y = "Children")
+```
+
+```{r}
+# -----------------------------------------------------------------------------
+# A. Which picture set did each trial use?
+#
+# The model RDM must be built from the pictures the child actually saw. Two
+# possibilities, and they need different handling:
+#
+#   sets_used == "1" in one trial and "2" in the other
+#       -> each trial used a different picture set. Build one RDM per set and
+#          average the two, matching what participant_dist_vecs() does to the
+#          child data (distance computed within trial, then averaged).
+#
+#   sets_used == "1+2" within a trial
+#       -> both pictures of each concept were on screen together (this is how
+#          emotions works). Average the two exemplar embeddings, then compute
+#          distances -- matching the group_by(..., base_name) %>% mean(posX)
+#          step in your pipeline.
+#
+# Do not assume; the answer differs by category.
+# -----------------------------------------------------------------------------
+
+set_structure <- bind_rows(
+  final_placements_grid %>% mutate(version = "grid"),
+  final_placements_free %>% mutate(version = "free")
+) %>%
+  group_by(version, participant_id, category, trial) %>%
+  summarise(
+    sets_used  = paste(sort(unique(set)), collapse = "+"),
+    n_concepts = n_distinct(base_name),
+    n_images   = n(),
+    .groups    = "drop"
+  )
+
+cat("\n--- A. picture-set structure per trial ---\n")
+set_structure %>%
+  count(version, category, sets_used, n_concepts, n_images) %>%
+  arrange(version, category) %>%
+  print(n = Inf)
+
+# Does a given category use a consistent scheme across children?
+cat("\nCategories where children differ in which sets they saw per trial:\n")
+set_structure %>%
+  group_by(version, category, trial) %>%
+  summarise(schemes = n_distinct(sets_used), .groups = "drop") %>%
+  filter(schemes > 1) %>%
+  print(n = Inf)
+
+
+# -----------------------------------------------------------------------------
+# B. Concept inventory -> input for 01_build_model_rdms.py
+#
+# Writing this out, rather than letting the Python script glob a stimulus
+# folder, guarantees two things: the model sees exactly the images the children
+# saw (not leftovers in the folder), and the concept strings are byte-identical
+# to the base_name values R will sort on. Everything downstream depends on
+# those two sets of strings agreeing.
+# -----------------------------------------------------------------------------
+
+concept_inventory <- bind_rows(final_placements_grid, final_placements_free) %>%
+  filter(!is.na(category)) %>%   # tag_categories() leaves NA for unmatched names
+  distinct(category, base_name, set, image_name) %>%
+  arrange(category, base_name, set)
+
+# Any image whose base_name tag_categories() could not place. These would be
+# silently dropped from every RDM, so look at them now.
+unmatched <- bind_rows(final_placements_grid, final_placements_free) %>%
+  filter(is.na(category)) %>%
+  distinct(base_name, image_name)
+if (nrow(unmatched)) {
+  cat("\nImages with no category tag (fix tag_categories() if unexpected):\n")
+  print(unmatched, n = Inf)
+}
+
+cat("\n--- B. concept inventory ---\n")
+concept_inventory %>%
+  group_by(category) %>%
+  summarise(n_concepts = n_distinct(base_name),
+            n_images   = n(),
+            sets       = paste(sort(unique(set)), collapse = ", "),
+            .groups    = "drop") %>%
+  print()
+
+# Every concept should have the same number of images. Rows here are problems.
+cat("\nConcepts with an unusual number of images:\n")
+concept_inventory %>%
+  count(category, base_name, name = "n_img") %>%
+  group_by(category) %>%
+  filter(n_img != median(n_img)) %>%
+  ungroup() %>%
+  print(n = Inf)
+
+write_csv(concept_inventory, "concept_inventory.csv")
+cat("\nwrote concept_inventory.csv (", nrow(concept_inventory), "rows )\n")
+
+# The exact concept list, in the order every RDM must use.
+cat("\nConcepts in RDM order (sort(base_name)), per category:\n")
+concept_lists <- concept_inventory %>%
+  group_by(category) %>%
+  summarise(concepts = paste(sort(unique(base_name)), collapse = ", "),
+            .groups = "drop")
+walk2(concept_lists$category, concept_lists$concepts,
+      ~ cat("  ", .x, ": ", .y, "\n", sep = ""))
+
+
+# -----------------------------------------------------------------------------
+# C. The reliability ceiling -- read this before trusting any model correlation
+#
+# A child's distance vector is a noisy measurement, and a noisy measurement
+# cannot correlate with a noiseless model RDM above sqrt(its reliability).
+#
+# Two steps to get the right ceiling:
+#
+#   1. `consistency` is the test-retest r of a SINGLE trial. But
+#      participant_dist_vecs() averages the two trials, and averaging lifts
+#      reliability (Spearman-Brown): rel_avg = 2*r / (1 + r). At r = .15 that
+#      is .26, not .15.
+#   2. The ceiling is sqrt(rel_avg). At r = .15 that is .51, not .39.
+#
+# So the situation is better than the raw consistencies suggest -- but still
+# low enough that the raw model correlations will be heavily attenuated.
+#
+# The real problem is for the age analysis: reliability itself rises with age,
+# so a rising raw correlation is partly just children getting less noisy.
+# Simulated at this design (66 pairs, reliability ramping .08 -> .42 across
+# ages 4-8), a CONSTANT true balance produces a spurious slope of about
+# +.04/year in the raw correlation. That is large enough to be mistaken for the
+# result. 03_model_comparison.R handles it by switching DV and by partialling
+# reliability out; compute the ceiling now so you know the scale of it.
+# -----------------------------------------------------------------------------
+
+sb <- function(r) 2 * pmax(r, 0) / (1 + pmax(r, 0))   # Spearman-Brown, 2 trials
+
+cat("\n--- C. max observable correlation, by category ---\n")
+consistency_all %>%
+  filter(!is.na(consistency)) %>%
+  group_by(version, category) %>%
+  summarise(mean_rtt = mean(consistency), n = n(), .groups = "drop") %>%
+  mutate(rel_trial_avg    = round(sb(mean_rtt), 3),
+         max_observable_r = round(sqrt(sb(mean_rtt)), 3),
+         mean_rtt         = round(mean_rtt, 3)) %>%
+  print(n = Inf)
+
+cat("\n--- C. the same ceiling, by age (this is the confound) ---\n")
+consistency_all %>%
+  filter(!is.na(consistency), !is.na(age_group)) %>%
+  group_by(version, age_group) %>%
+  summarise(mean_rtt = mean(consistency), n = n(), .groups = "drop") %>%
+  mutate(rel_trial_avg    = round(sb(mean_rtt), 3),
+         max_observable_r = round(sqrt(sb(mean_rtt)), 3),
+         mean_rtt         = round(mean_rtt, 3)) %>%
+  print(n = Inf)
+
+# Per-child reliability, saved for use as a covariate later. Computed from two
+# trials over 66 pairs, so it is itself noisy -- good enough as a covariate,
+# not good enough to divide by.
+child_reliability <- consistency_all %>%
+  filter(!is.na(consistency)) %>%
+  select(version, participant_id, category, reliability = consistency)
+
+write_csv(child_reliability, "child_reliability.csv")
+cat("\nwrote child_reliability.csv\n")
+```
+
+```{r}
+# =============================================================================
+# 03_model_comparison.R
+#
+# Correlate children's arrangements with the reference RDMs from
+# 01_build_model_rdms.py, and ask whether the perceptual/conceptual balance
+# shifts with age.
+#
+# Needs, from kidsnet_pilot_analysis.qmd:
+#   final_placements_grid / final_placements_free
+#   age_df
+#   compute_dist_vec()          (already in your file)
+#   participant_dist_vecs()     (already in your file)
+# and, from 01_build_model_rdms.py:
+#   model_rdms_long.csv
+#
+# THE ONE THING THAT MATTERS MOST HERE
+# ------------------------------------
+# A noisy measurement cannot correlate with a noiseless model RDM above
+# sqrt(its reliability), and your reliability RISES with age (free version:
+# .034, .136, .297, .264, .332 from age 4 to 8). So a model correlation that
+# rises with age is partly just children getting less noisy.
+#
+# Simulated at YOUR design and YOUR reliabilities (66 pairs, n = 110 per
+# domain), with the true perceptual/conceptual balance held CONSTANT across
+# age, the spurious age slope is:
+#
+#                                   all ages   ages 5-8   + reliability cov.
+#   raw correlation with a model      +.045      +.027      +.036 / +.021
+#   conceptual share (true = .80)     +.031      +.017      +.025 / +.014
+#
+# and the smallest slope this design can detect in the share is about
+# .067/year (= .27 across ages 4-8). Three conclusions, in order of how much
+# they change what you do:
+#
+#   1. DO NOT report a raw age slope as a finding. The artifact is as large as
+#      a real effect would be.
+#   2. The reliability covariate helps far less than you would hope -- about a
+#      20% reduction -- because the covariate is itself estimated from two
+#      trials and so under-corrects. It is worth including, but it is not a
+#      fix, and an earlier version of this script overstated it.
+#   3. Excluding the 4-year-olds does roughly twice as much as the covariate
+#      (a 45% reduction). Their single-trial reliability of .034 means their
+#      distance vectors carry almost no repeatable signal. Section 7 fits all
+#      three versions so you can see the effect move.
+#
+# Why the share is better than the raw correlation at all: in the population,
+# R-squared of y = t + e on any predictor set equals R-squared of t times the
+# reliability, so BOTH unique shares scale by the same factor and it cancels in
+# the ratio. What is left is finite-sample R-squared bias (~1/66 added to each
+# share), which pulls the ratio toward .5.
+#
+# That shrinkage is large, so read observed shares as a LOWER BOUND on the true
+# imbalance. Simulated at your reliabilities:
+#
+#     true share   observed, 66 pairs   observed, 15 pairs
+#        0.20            0.37                 0.45
+#        0.50            0.50                 0.50
+#        0.80            0.64                 0.55
+#
+# A 15-pair domain (6 concepts, i.e. emotions) compresses so hard that the
+# share is uninformative there. That is a reason not to run this analysis on a
+# 6-concept domain, independent of SPoSE coverage.
+# =============================================================================
+
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+library(emmeans)
+library(conflicted)
+conflicts_prefer(dplyr::filter, dplyr::select, dplyr::lag, lmerTest::lmer,
+                 .quiet = TRUE)
+
+# Use the free version: 110 children against 32 in grid, and higher
+# reliability in every domain (animals .27 vs .13, plants .24 vs .19). The grid
+# version's by-age cells get as small as 3 children, which cannot support this.
+VERSION <- "free"
+N_PERM  <- 1000
+
+# cor() errors rather than returning NA when a vector is entirely missing,
+# which happens for every `conceptual` column in emotions (facial expressions
+# have no SPoSE vector). Used anywhere a column may be all-NA for a domain.
+safe_cor <- function(x, y, method = "pearson", min_n = 3) {
+  ok <- is.finite(x) & is.finite(y)
+  if (sum(ok) < min_n) return(NA_real_)
+  if (sd(x[ok]) == 0 || sd(y[ok]) == 0) return(NA_real_)
+  cor(x[ok], y[ok], method = method)
+}
+
+# Minimum age. Set to 5 for the robustness check described in the header: the
+# 4-year-olds' single-trial reliability is .034, so their vectors carry almost
+# no repeatable signal, and including them roughly doubles the spurious age
+# slope. Report both.
+AGE_MIN <- 4
+
+set.seed(42)
+
+# "avg" throughout: the Python script now groups picture sets by what the child
+# saw in one trial (animals/plants [[1],[2]]; emotions [[1,2],[3,4]]), averages
+# embeddings within a trial, and averages the resulting RDMs across trials --
+# which is exactly what participant_dist_vecs() does to the child data. "all"
+# (every exemplar pooled before distances) is available as a cross-check.
+SET_CHOICE <- c(animals = "avg", plants = "avg", emotions = "avg")
+
+
+# -----------------------------------------------------------------------------
+# 1. LOAD AND ALIGN
+# -----------------------------------------------------------------------------
+
+rdms_raw <- read_csv("model_rdms_long.csv", show_col_types = FALSE)
+
+cat("\n--- what the builder produced ---\n")
+rdms_raw %>% count(domain, model, picture_set) %>% print(n = Inf)
+
+# Pick one picture_set per domain for the image models; SPoSE has none.
+model_rdms <- rdms_raw %>%
+  filter(model == "conceptual" |
+           picture_set == SET_CHOICE[domain]) %>%
+  pivot_wider(id_cols    = c(domain, pair_index, concept_a, concept_b),
+              names_from = model, values_from = distance) %>%
+  arrange(domain, pair_index)
+
+stopifnot("perceptual" %in% names(model_rdms))
+
+cat("\n--- RDMs in use ---\n")
+model_rdms %>%
+  group_by(domain) %>%
+  summarise(n_pairs     = n(),
+            perceptual  = sum(!is.na(perceptual)),
+            hybrid      = sum(!is.na(hybrid)),
+            conceptual  = if ("conceptual" %in% names(model_rdms))
+                            sum(!is.na(conceptual)) else 0L,
+            .groups = "drop") %>%
+  print()
+
+
+# -----------------------------------------------------------------------------
+# 2. VERIFY THE ELEMENT ORDER
+#
+# Everything below assumes element k of a child's dvec and row pair_index == k
+# of model_rdms are the same pair of concepts. R's dist() stores the lower
+# triangle column-major: (2,1),(3,1),...,(n,1),(3,2),... This reproduces that
+# and compares it to what Python wrote. If it fails, STOP -- every correlation
+# below would be quietly wrong, with no symptom.
+# -----------------------------------------------------------------------------
+
+verify_pair_order <- function(rdms) {
+  for (dom in unique(rdms$domain)) {
+    d <- rdms %>% filter(domain == dom) %>% arrange(pair_index)
+    concepts <- sort(unique(c(d$concept_a, d$concept_b)))
+    n <- length(concepts)
+    stopifnot(nrow(d) == n * (n - 1) / 2)
+    lt <- which(lower.tri(matrix(0, n, n)), arr.ind = TRUE)   # column-major
+    stopifnot(identical(concepts[lt[, "col"]], d$concept_a),
+              identical(concepts[lt[, "row"]], d$concept_b))
+  }
+  cat("\nPair order verified against R's dist() for all domains.\n")
+}
+verify_pair_order(model_rdms)
+
+# Second, independent check: the concepts the children saw are exactly the
+# concepts in the RDMs, spelled the same way. A silent mismatch here is the
+# most likely way for this whole analysis to produce plausible nonsense.
+fp <- (if (VERSION == "free") final_placements_free else final_placements_grid) %>%
+  filter(!is.na(category))     # tag_categories() leaves NA for unmatched names
+
+concepts_child <- fp %>%
+  distinct(category, base_name) %>%
+  group_by(category) %>%
+  summarise(child = list(sort(base_name)), .groups = "drop")
+
+concepts_model <- model_rdms %>%
+  group_by(category = domain) %>%
+  summarise(model = list(sort(unique(c(concept_a, concept_b)))), .groups = "drop")
+
+concept_check <- full_join(concepts_child, concepts_model, by = "category") %>%
+  rowwise() %>%
+  mutate(identical  = identical(child, model),
+         only_child = paste(setdiff(child, model), collapse = ", "),
+         only_model = paste(setdiff(model, child), collapse = ", ")) %>%
+  ungroup()
+
+cat("\n--- concept lists: children vs models ---\n")
+concept_check %>% select(category, identical, only_child, only_model) %>% print()
+if (any(!concept_check$identical, na.rm = TRUE))
+  warning("Concept lists differ for at least one domain. Domains with a ",
+          "mismatch are dropped below; fix ALIASES or the inventory.")
+
+usable <- concept_check %>% filter(identical) %>% pull(category)
+
+
+# -----------------------------------------------------------------------------
+# 3. HOW MUCH DO THE REFERENCES OVERLAP?
+#
+# Read this before any result below. Where perceptual and conceptual are highly
+# correlated with each other, the unique shares are small and the design has
+# little to work with -- that is a property of the stimuli, not of the children.
+# -----------------------------------------------------------------------------
+
+if (!"conceptual" %in% names(model_rdms)) model_rdms$conceptual <- NA_real_
+
+cat("\n--- correlations among the reference RDMs, by domain ---\n")
+cat("(NA in a conceptual column = no SPoSE vectors for that domain)\n")
+model_rdms %>%
+  filter(domain %in% usable) %>%
+  group_by(domain) %>%
+  summarise(
+    n_pairs     = n(),
+    r_perc_hybr = round(safe_cor(perceptual, hybrid), 2),
+    r_perc_conc = round(safe_cor(perceptual, conceptual), 2),
+    r_conc_hybr = round(safe_cor(conceptual, hybrid), 2),
+    .groups = "drop"
+  ) %>%
+  print()
+cat("Where r_perc_conc is high, the two references are near-redundant and the\n",
+    "unique shares will be small -- a property of the stimuli, not the children.\n")
+
+
+# -----------------------------------------------------------------------------
+# 4. CORRELATE EACH CHILD WITH EACH REFERENCE
+#
+# Spearman, because a child's placement distances are not linearly related to
+# a cosine distance in an embedding space and there is no reason to expect them
+# to be. Pearson is reported too, since the variance partitioning needs it.
+# -----------------------------------------------------------------------------
+
+pdv <- participant_dist_vecs(fp) %>% filter(category %in% usable)
+
+fit_one <- function(dvec, mods) {
+  stopifnot(length(dvec) == nrow(mods))
+  d <- tibble(y = as.numeric(dvec),
+              p = mods$perceptual,
+              h = mods$hybrid,
+              k = if ("conceptual" %in% names(mods)) mods$conceptual else NA_real_)
+
+  r2 <- function(form) summary(lm(form, data = d))$r.squared
+  has_k <- !all(is.na(d$k))
+
+  out <- tibble(
+    rho_perceptual = cor(d$y, d$p, method = "spearman"),
+    rho_hybrid     = cor(d$y, d$h, method = "spearman"),
+    r_perceptual   = cor(d$y, d$p),
+    r_hybrid       = cor(d$y, d$h),
+    r2_perceptual  = r2(y ~ p)
+  )
+  if (!has_k) {
+    return(out %>% mutate(rho_conceptual = NA_real_, r_conceptual = NA_real_,
+                          unique_perceptual = NA_real_,
+                          unique_conceptual = NA_real_,
+                          shared = NA_real_, r2_full = NA_real_))
+  }
+
+  r2_full <- r2(y ~ p + k); r2_p <- r2(y ~ p); r2_k <- r2(y ~ k)
+  out %>% mutate(
+    rho_conceptual    = cor(d$y, d$k, method = "spearman"),
+    r_conceptual      = cor(d$y, d$k),
+    # both unique shares are R-squared differences from adding a predictor, so
+    # both are >= 0. `shared` can be negative -- that is suppression, not a
+    # bug, and it should be reported rather than clamped.
+    unique_perceptual = r2_full - r2_k,
+    unique_conceptual = r2_full - r2_p,
+    shared            = r2_p + r2_k - r2_full,
+    r2_full           = r2_full
+  )
+}
+
+fits <- pdv %>%
+  mutate(res = map2(dvec, category, function(v, dom) {
+    fit_one(v, model_rdms %>% filter(domain == dom) %>% arrange(pair_index))
+  })) %>%
+  select(-dvec) %>%
+  unnest(res) %>%
+  left_join(age_df, by = "participant_id") %>%
+  filter(!is.na(age), age >= AGE_MIN) %>%
+  mutate(age_c = age - 6.5)
+
+cat("\n--- mean fit to each reference, by domain ---\n")
+fits %>%
+  group_by(category) %>%
+  summarise(n = n(),
+            across(c(rho_perceptual, rho_hybrid, rho_conceptual),
+                   ~ round(mean(.x, na.rm = TRUE), 3)),
+            .groups = "drop") %>%
+  print()
+
+
+# -----------------------------------------------------------------------------
+# 5. IS THE RAW CORRELATION JUST RELIABILITY?
+#
+# The diagnostic that decides which DV you can report. If raw fit tracks a
+# child's own test-retest reliability, the raw numbers are measuring noise.
+# The share should not track it.
+# -----------------------------------------------------------------------------
+
+rel <- consistency_all %>%
+  filter(version == VERSION, !is.na(consistency)) %>%
+  select(participant_id, category, reliability = consistency)
+
+fits <- fits %>%
+  left_join(rel, by = c("participant_id", "category")) %>%
+  mutate(
+    # Mostly attenuation-free: the reliability factor appears in both unique
+    # shares and cancels in the ratio, leaving only finite-sample R-squared
+    # bias, which pulls the value toward .5. Undefined when the model pair
+    # explains essentially nothing, so those rows are dropped rather than
+    # given a meaningless value.
+    conceptual_share = if_else(
+      unique_perceptual + unique_conceptual > 1e-6,
+      unique_conceptual / (unique_perceptual + unique_conceptual),
+      NA_real_
+    )
+  )
+
+cat("\n--- does fit track reliability? ---\n")
+fits %>%
+  group_by(category) %>%
+  summarise(
+    n                   = sum(!is.na(reliability)),
+    rel_vs_rho_perc     = round(safe_cor(reliability, rho_perceptual), 2),
+    rel_vs_rho_conc     = round(safe_cor(reliability, rho_conceptual), 2),
+    rel_vs_share        = round(safe_cor(reliability, conceptual_share), 2),
+    .groups = "drop"
+  ) %>%
+  print()
+cat("Expected: rel_vs_rho_* substantial and positive, rel_vs_share much\n",
+    "smaller. The share is not fully immune -- shrinkage toward .5 is stronger\n",
+    "at low reliability -- so a small positive rel_vs_share is normal. If it is\n",
+    "as large as rel_vs_rho_*, the share is buying you nothing and the whole\n",
+    "age analysis is measuring noise.\n")
+
+cat("\n--- how many children have a usable share? ---\n")
+fits %>%
+  group_by(category) %>%
+  summarise(n = n(), n_share = sum(!is.na(conceptual_share)),
+            .groups = "drop") %>%
+  print()
+
+
+# -----------------------------------------------------------------------------
+# 6. IS ANY OF THIS ABOVE CHANCE?
+#
+# Permute the CONCEPT LABELS of the model RDM, not the elements of the distance
+# vector. Shuffling elements destroys the matrix structure and gives an
+# anti-conservative null, because real distance matrices have constraints
+# (triangle inequality, shared rows) that a shuffled vector does not.
+# -----------------------------------------------------------------------------
+
+long_to_matrix <- function(d) {
+  concepts <- sort(unique(c(d$concept_a, d$concept_b)))
+  n <- length(concepts)
+  m <- matrix(0, n, n, dimnames = list(concepts, concepts))
+  ia <- match(d$concept_a, concepts); ib <- match(d$concept_b, concepts)
+  m[cbind(ia, ib)] <- d$distance_col
+  m[cbind(ib, ia)] <- d$distance_col
+  m
+}
+
+# A permuted model vector: relabel the concepts, then re-read the lower
+# triangle in R's dist() order.
+permuted_vec <- function(m) {
+  p <- sample(nrow(m))
+  as.vector(as.dist(m[p, p]))
+}
+
+perm_null <- function(dom, model_col, n_perm = N_PERM) {
+  d <- model_rdms %>% filter(domain == dom) %>% arrange(pair_index) %>%
+    mutate(distance_col = .data[[model_col]])
+  if (all(is.na(d$distance_col))) return(NULL)
+  m <- long_to_matrix(d)
+
+  kids <- pdv %>% filter(category == dom) %>% pull(dvec)
+  obs  <- mean(map_dbl(kids, ~ cor(.x, as.vector(as.dist(m)),
+                                   method = "spearman")))
+  null <- replicate(n_perm, {
+    v <- permuted_vec(m)
+    mean(map_dbl(kids, ~ cor(.x, v, method = "spearman")))
+  })
+  tibble(domain = dom, model = model_col,
+         observed = obs,
+         null_mean = mean(null),
+         null_p95  = unname(quantile(null, 0.95)),
+         p_perm    = (1 + sum(null >= obs)) / (n_perm + 1))
+}
+
+cat("\n--- permutation test against relabelled model RDMs ---\n")
+perm_tbl <- expand_grid(
+  dom = usable,
+  model_col = intersect(c("perceptual", "hybrid", "conceptual"),
+                        names(model_rdms))
+) %>%
+  mutate(res = map2(dom, model_col, perm_null)) %>%
+  pull(res) %>%
+  compact() %>%
+  bind_rows()
+
+perm_tbl %>% mutate(across(where(is.numeric), ~ round(.x, 4))) %>% print(n = Inf)
+
+
+# -----------------------------------------------------------------------------
+# 7. DOES THE BALANCE SHIFT WITH AGE?
+#
+# Primary test, fitted three ways so the artifact is visible rather than
+# assumed away. None of the three is clean on its own; the question is whether
+# the age slope survives all of them.
+#
+#   (1) plain          compare against the simulated artifact: +.031/year would
+#                      be expected with NO real shift if the true balance is
+#                      conceptual-leaning
+#   (2) + reliability  removes ~20% of the artifact
+#   (3) ages 5-8       removes ~45%, at the cost of ~20% of the sample
+#
+# A slope that is large in (1) and vanishes in (3) is reliability, not
+# development. A slope that holds up in (3) is worth reporting.
+# -----------------------------------------------------------------------------
+
+share_dat <- fits %>% filter(!is.na(conceptual_share))
+
+slope_table <- function(dat, label, multi) {
+  if (n_distinct(dat$participant_id) < 10) {
+    cat("\n[", label, "] too few children\n"); return(invisible(NULL))
+  }
+  form <- if (multi) {
+    conceptual_share ~ age_c * category + (1 | participant_id)
+  } else {
+    conceptual_share ~ age_c + (1 | participant_id)
+  }
+  m <- lmer(form, data = dat)
+  cat("\n[", label, "]  n children =", n_distinct(dat$participant_id), "\n")
+  if (multi) print(summary(emtrends(m, ~ category, var = "age_c"), infer = TRUE))
+  else       print(round(summary(m)$coefficients, 4))
+}
+
+multi <- n_distinct(share_dat$category) > 1
+
+if (multi) {
+  cat("\n--- does the age slope differ by domain? ---\n")
+  print(anova(
+    lmer(conceptual_share ~ age_c + category + (1 | participant_id),
+         data = share_dat, REML = FALSE),
+    lmer(conceptual_share ~ age_c * category + (1 | participant_id),
+         data = share_dat, REML = FALSE)))
+}
+
+cat("\n=== age slope on the conceptual share, three ways ===")
+slope_table(share_dat, "1. plain", multi)
+
+# NB: `x <- if (a) b` followed by `else` on the next line is a syntax error at
+# top level in R -- the statement ends at the newline. Braces avoid it.
+m_cov <- if (multi) {
+  lmer(conceptual_share ~ age_c * category + reliability +
+         (1 | participant_id), data = share_dat)
+} else {
+  lmer(conceptual_share ~ age_c + reliability + (1 | participant_id),
+       data = share_dat)
+}
+
+cat("\n[ 2. + reliability covariate ]\n")
+if (multi) {
+  print(summary(emtrends(m_cov, ~ category, var = "age_c"), infer = TRUE))
+} else {
+  print(round(summary(m_cov)$coefficients, 4))
+}
+
+if (AGE_MIN < 5) {
+  slope_table(share_dat %>% filter(age >= 5), "3. ages 5-8 only", multi)
+} else {
+  cat("\n[ 3. ages 5-8 only ] AGE_MIN is already", AGE_MIN,
+      "-- set it to 4 to see version 1.\n")
+}
+
+cat("\nBenchmarks: artifact ~+.031/yr (all ages) or ~+.017/yr (5-8) if the\n",
+    "true balance is constant and conceptual-leaning; detection threshold\n",
+    "~.067/yr. And remember the shrinkage -- an observed mean share of .64\n",
+    "corresponds to a true share near .80.\n")
+
+# Secondary, on the raw correlations, WITH reliability as a covariate. Without
+# that covariate this model cannot separate a developing representation from a
+# child who simply sat still; with it the age term is the part not explained by
+# becoming less noisy. Report both, and say which is which.
+raw_long <- fits %>%
+  select(participant_id, category, age_c, reliability,
+         rho_perceptual, rho_conceptual) %>%
+  pivot_longer(starts_with("rho_"), names_prefix = "rho_",
+               names_to = "model_type", values_to = "rho") %>%
+  filter(!is.na(rho)) %>%
+  mutate(model_type = factor(model_type, levels = c("perceptual", "conceptual")))
+
+cat("\n--- raw fit ~ age, no reliability covariate (inflated) ---\n")
+print(summary(lmer(rho ~ age_c * model_type + category + (1 | participant_id),
+                   data = raw_long))$coefficients)
+
+cat("\n--- raw fit ~ age, reliability partialled out ---\n")
+print(summary(lmer(rho ~ age_c * model_type + reliability + category +
+                     (1 | participant_id), data = raw_long))$coefficients)
+
+
+# -----------------------------------------------------------------------------
+# 8. THE DIAGNOSTIC-PAIR TEST
+#
+# The sharpest version of the question, because it does not depend on the
+# partition at all. Find the pairs where the two references disagree most, then
+# ask how close children actually placed them. "Looks alike, conceptually
+# distant" should be placed near by younger children and farther by older ones.
+# -----------------------------------------------------------------------------
+
+conc_domains <- model_rdms %>%
+  filter(domain %in% usable, !is.na(conceptual)) %>%
+  count(domain) %>% filter(n >= 10) %>% pull(domain)
+
+if (length(conc_domains)) {
+
+  diagnostic_pairs <- model_rdms %>%
+    filter(domain %in% conc_domains, !is.na(conceptual)) %>%
+    group_by(domain) %>%
+    mutate(gap = as.numeric(scale(conceptual)) - as.numeric(scale(perceptual)),
+           pair_type = case_when(
+             gap >= quantile(gap, 0.90) ~ "looks alike, conceptually distant",
+             gap <= quantile(gap, 0.10) ~ "conceptually close, looks different",
+             TRUE                       ~ NA_character_)) %>%
+    ungroup() %>%
+    filter(!is.na(pair_type)) %>%
+    mutate(pair_id = paste(domain, concept_a, concept_b, sep = "_"))
+
+  cat("\n--- diagnostic pairs ---\n")
+  print(diagnostic_pairs %>% count(domain, pair_type))
+  cat("\nEyeball these; if they do not look sensible, the RDMs are wrong:\n")
+  diagnostic_pairs %>%
+    group_by(domain, pair_type) %>% slice_head(n = 4) %>% ungroup() %>%
+    select(domain, pair_type, concept_a, concept_b) %>%
+    print(n = 40)
+
+  # z-scored within child x domain, so a child who used a corner of the canvas
+  # is not treated as placing everything close together
+  child_pairs <- pdv %>%
+    mutate(pair_index = map(dvec, seq_along)) %>%
+    unnest(c(dvec, pair_index)) %>%
+    rename(placement_dist = dvec) %>%
+    group_by(participant_id, category) %>%
+    mutate(placement_z = as.numeric(scale(placement_dist))) %>%
+    ungroup() %>%
+    inner_join(diagnostic_pairs %>%
+                 select(domain, pair_index, pair_type, pair_id),
+               by = c("category" = "domain", "pair_index")) %>%
+    left_join(age_df, by = "participant_id") %>%
+    filter(!is.na(age), age >= AGE_MIN) %>%
+    mutate(age_c = age - 6.5, pair_type = factor(pair_type))
+
+  m_pairs <- lmer(placement_z ~ age_c * pair_type +
+                    (1 | participant_id) + (1 | pair_id), data = child_pairs)
+
+  cat("\n--- age x pair_type ---\n")
+  print(summary(m_pairs)$coefficients)
+  print(summary(emtrends(m_pairs, ~ pair_type, var = "age_c"), infer = TRUE))
+} else {
+  cat("\n--- diagnostic-pair test skipped: no domain has a conceptual RDM ---\n")
+}
+
+
+# -----------------------------------------------------------------------------
+# 9. PLOT
+# -----------------------------------------------------------------------------
+
+p1 <- share_dat %>%
+  ggplot(aes(age, conceptual_share)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey50") +
+  geom_point(alpha = 0.5, size = 1.8) +
+  geom_smooth(method = "lm", se = TRUE, colour = "#0F728B", fill = "#0F728B",
+              alpha = 0.15) +
+  facet_wrap(~ category) +
+  scale_x_continuous(breaks = 4:8) +
+  labs(x = "Age (years)",
+       y = "Conceptual share of explained variance",
+       subtitle = "0.5 = perceptual and conceptual contribute equally") +
+  theme_minimal(base_size = 12)
+
+p2 <- raw_long %>%
+  mutate(age_bin = floor(age_c + 6.5)) %>%
+  group_by(category, model_type, age_bin) %>%
+  summarise(m = mean(rho), se = sd(rho) / sqrt(n()), n = n(), .groups = "drop") %>%
+  ggplot(aes(age_bin, m, colour = model_type)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_pointrange(aes(ymin = m - se, ymax = m + se),
+                  position = position_dodge(width = 0.2)) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  facet_wrap(~ category) +
+  scale_colour_manual(values = c(perceptual = "#0F728B",
+                                 conceptual = "#F1731D")) +
+  labs(x = "Age (years)", y = "Fit to reference (Spearman rho)", colour = NULL,
+       subtitle = "Raw, so still attenuated by measurement noise") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+print(p1)
+print(p2)
+
+
+# -----------------------------------------------------------------------------
+# 10. SAVE
+# -----------------------------------------------------------------------------
+
+write_csv(fits %>% select(-any_of("age_c")), paste0("model_fits_", VERSION, ".csv"))
+write_csv(perm_tbl, paste0("model_perm_", VERSION, ".csv"))
+cat("\nwrote model_fits_", VERSION, ".csv and model_perm_", VERSION, ".csv\n",
+    sep = "")
+```

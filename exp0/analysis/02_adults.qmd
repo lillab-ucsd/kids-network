@@ -1,0 +1,765 @@
+---
+title: "KidsNet Study 1 — Comparison with adults"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+Whether the structure children impose converges on the structure adults impose. The uncorrected version of this comparison is confounded by age-related change in measurement reliability, so the uncorrected and corrected estimates are both reported and the contrast between them is itself a result.
+
+```{r}
+#| label: setup
+# Configuration and shared functions. setup.R is the single source of truth
+# for every constant and helper used below.
+source(here::here("setup.R"))
+library(dendextend); library(lmerTest)
+library(broom); library(broom.mixed)
+library(mgcv)                 # linearity check only; attached so s() resolves
+theme_set(theme_minimal(base_size = 12))
+
+S <- readRDS("analysis_sample.rds")
+fp <- S$children; cons <- S$consistency
+str(S$config, max.level = 1)
+```
+
+# Align children and the adult reference
+
+```{r}
+#| label: align
+adult_rdm <- S$adult_rdm
+
+child_concepts <- fp %>%
+  distinct(category, base_name) %>%
+  group_by(category) %>%
+  summarise(child = list(sort(base_name)), .groups = "drop")
+
+align <- child_concepts %>%
+  inner_join(adult_rdm %>%
+               group_by(category = domain) %>%
+               summarise(adult = list(sort(unique(c(concept_a, concept_b)))),
+                         .groups = "drop"),
+             by = "category") %>%
+  rowwise() %>%
+  mutate(same = identical(child, adult),
+         only_child = paste(setdiff(child, adult), collapse = ", "),
+         only_adult = paste(setdiff(adult, child), collapse = ", ")) %>%
+  ungroup()
+
+align %>% select(category, same, only_child, only_adult) %>% show_all()
+
+usable <- align %>% filter(same) %>% pull(category)
+# cat(), not warning(): the YAML sets warning: false, so a warning here
+# would be swallowed and a misaligned domain would disappear in silence.
+if (length(usable) < nrow(align)) {
+  cat("\n*** Dropping misaligned domains:",
+      paste(setdiff(align$category, usable), collapse = ", "), "***\n\n")
+}
+
+refs <- adult_rdm %>%
+  filter(domain %in% usable) %>%
+  arrange(domain, pair_index) %>%
+  group_by(domain) %>%
+  summarise(ref = list(distance), .groups = "drop") %>%
+  deframe()
+
+var_ref <- map_dbl(refs, ref_variance)
+tibble(domain = names(var_ref), n_pairs = map_int(refs, length),
+       var_ref = round(var_ref, 2)) %>% show_all()
+```
+
+# The adult reference as a measurement
+
+The reference is not ground truth, it is an average of twenty-odd people doing the same noisy task. These are the same quantities reported for children, on the same scale, so the child numbers can be read against something.
+
+```{r}
+#| label: adult-basics
+ad <- S$adult_consistency %>%
+  mutate(category = as.character(category)) %>%
+  filter(category %in% usable) %>%
+  group_by(category) %>%
+  summarise(adults = sum(!is.na(consistency)),
+            adult_rel = mean(consistency, na.rm = TRUE), .groups = "drop")
+
+ch <- cons %>%
+  mutate(category = as.character(category)) %>%
+  filter(category %in% usable) %>%
+  group_by(category) %>%
+  summarise(children = sum(!is.na(consistency)),
+            child_rel = mean(consistency, na.rm = TRUE), .groups = "drop")
+
+ad %>%
+  inner_join(ch, by = "category") %>%
+  left_join(S$adult_ceiling %>%
+              transmute(category = as.character(category),
+                        # loo: one adult vs the mean of the others, the
+                        # comparison a child actually faces.
+                        # between_adult: mean pairwise agreement between two
+                        # adults, which is lower because neither side is a mean.
+                        adult_loo = loo, between_adult),
+            by = "category") %>%
+  mutate(adult_ceiling_2 = sqrt(sb(adult_rel, 2)),
+         child_ceiling_2 = sqrt(sb(child_rel, 2)),
+         # How much of the adults' own consistency the children reach. This is
+         # the honest denominator for "how adult-like are they": a ratio of 1
+         # would mean children are as self-consistent as adults, not that they
+         # agree with adults.
+         rel_ratio = child_rel / adult_rel,
+         across(where(is.numeric), ~ round(.x, 3)),
+         category = fct_domain(category)) %>%
+  arrange(category) %>% show_all()
+```
+
+```{r}
+#| label: adult-agreement
+# The distribution behind between_adult, not just its mean. Two adults with
+# the same mean agreement can be twenty people who all half-agree or a tight
+# consensus with three dissenters, and those imply different things about what
+# the reference represents.
+adult_pdv <- participant_dist_vecs(S$adults) %>%
+  mutate(category = as.character(category)) %>%
+  filter(category %in% usable)
+
+pairwise_adult <- adult_pdv %>%
+  group_by(category) %>%
+  summarise(r = list({
+    v <- dvec
+    if (length(v) < 2) numeric(0) else
+      combn(length(v), 2, function(ix)
+        cor(v[[ix[1]]], v[[ix[2]]], method = "spearman"))
+  }), .groups = "drop") %>%
+  unnest(r)
+
+pairwise_adult %>%
+  group_by(category) %>%
+  summarise(n_pairs = n(),
+            mean = mean(r), sd = sd(r),
+            p10 = quantile(r, .10), median = median(r),
+            p90 = quantile(r, .90), min = min(r),
+            .groups = "drop") %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)),
+         category = fct_domain(category)) %>%
+  arrange(category) %>% show_all()
+
+# Per adult: mean agreement with every other adult in that domain. An adult
+# near zero here is pulling the reference toward noise.
+adult_pdv %>%
+  group_by(category) %>%
+  mutate(mean_agree = map_dbl(seq_len(n()), function(i) {
+    others <- dvec[-i]
+    mean(map_dbl(others, ~ cor(dvec[[i]], .x, method = "spearman")))
+  })) %>%
+  ungroup() %>%
+  select(participant_id, category, mean_agree) %>%
+  arrange(mean_agree) %>% head(10) %>%
+  mutate(mean_agree = round(mean_agree, 3)) %>% show_all()
+```
+
+```{r}
+#| label: fig-adult-agreement
+#| fig-width: 7
+#| fig-height: 3.2
+pairwise_adult %>%
+  mutate(category = fct_domain(category)) %>%
+  ggplot(aes(r, fill = category)) +
+  geom_histogram(bins = 30, colour = "white", linewidth = .2) +
+  geom_vline(xintercept = 0, linetype = 3, colour = "grey40") +
+  facet_wrap(~ category) +
+  scale_fill_manual(values = PALETTE, guide = "none") +
+  labs(x = "Spearman r between two adults", y = "adult pairs",
+       title = "How much adults agree with each other",
+       subtitle = "Every pair of adults within a domain")
+```
+
+```{r}
+#| label: fig-adult-vs-child-rel
+#| fig-width: 7
+#| fig-height: 3.8
+# Child reliability by age band against the adult value as a flat line. The
+# distance left to run at age 8 is the part of the age trend that is still
+# measurement rather than structure.
+ch_by_age <- cons %>%
+  mutate(category = as.character(category)) %>%
+  filter(category %in% usable, !is.na(consistency)) %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), rel = mean(consistency), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  mutate(category = fct_domain(category))
+
+ggplot(ch_by_age, aes(age_bin, rel, colour = category)) +
+  geom_hline(data = mutate(ad, category = fct_domain(category)),
+             aes(yintercept = adult_rel, colour = category),
+             linetype = 2, linewidth = .5) +
+  geom_point(aes(size = n)) + geom_line(linewidth = .8) +
+  facet_wrap(~ category) +
+  scale_colour_manual(values = PALETTE, guide = "none") +
+  scale_size_continuous(range = c(1.5, 3.5), guide = "none") +
+  scale_x_continuous(breaks = AGE_MIN:(AGE_MAX - 1)) +
+  labs(x = "age band", y = "test-retest reliability",
+       title = "Child reliability by age, against the adult value",
+       subtitle = "Dashed: mean adult test-retest in the same domain")
+```
+
+# Per-child quantities
+
+```{r}
+#| label: parts
+build_parts <- function(fp_in) {
+  trial_dist_vecs(fp_in) %>%
+    filter(category %in% usable) %>%
+    group_by(participant_id, category) %>%
+    filter(n() >= MIN_TRIALS) %>%
+    summarise(p = list(cross_trial_parts(dvec, refs[[unique(category)]])),
+              n_trials = n(), .groups = "drop") %>%
+    unnest_wider(p) %>%
+    inner_join(S$age, by = "participant_id") %>%
+    add_age_bins() %>%
+    # Join on character keys, then make the factor. Joining a factor column
+    # to a character one leaves dplyr to coerce the key types for you.
+    left_join(cons %>% select(participant_id, category,
+                              reliability = consistency),
+              by = c("participant_id", "category")) %>%
+    mutate(category = fct_domain(category))
+}
+
+child_parts <- build_parts(fp)
+
+child_parts %>% count(category, name = "children") %>% show_all()
+```
+
+# Uncorrected similarity
+
+Confounded by reliability. Reported because it is what the literature reports, and because the contrast with the corrected estimate below is the point.
+
+Four-year-olds are included here. The uncorrected correlation is a real measurement at every age — it is interpretable against that age's ceiling, which is why the ceiling is shown beside it. What four-year-olds cannot support is the corrected estimate, which divides by a quantity their data cannot pin down.
+
+```{r}
+#| label: raw
+child_parts %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), raw = mean(raw, na.rm = TRUE),
+            mean_rel = mean(reliability, na.rm = TRUE), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  mutate(ceiling = sqrt(sb(mean_rel, 2)),
+         pct_of_ceiling = round(100 * raw / ceiling, 1),
+         across(c(raw, mean_rel, ceiling), ~ round(.x, 3)),
+         category = fct_domain(category)) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+```{r}
+#| label: raw-slope
+# The corrected slope is estimated on ages CORRECTED_AGE_MIN and up, so the
+# raw slope is reported on the same range as well as on the full one. Only
+# the matched pair is a like-for-like contrast; the gap between the two raw
+# slopes measures how much the youngest band alone adds to the artifact.
+raw_slope <- function(d, label) {
+  m <- lmer(raw ~ age_c + (1 | participant_id) + (1 | category), data = d)
+  tidy(m, effects = "fixed") %>%
+    filter(term == "age_c") %>%
+    transmute(range = label, n_children = n_distinct(d$participant_id),
+              slope = estimate, se = std.error, p = p.value)
+}
+
+bind_rows(
+  raw_slope(child_parts,
+            paste0("ages ", AGE_MIN, "-", AGE_MAX - 1, " (all)")),
+  raw_slope(filter(child_parts, age_bin >= CORRECTED_AGE_MIN),
+            paste0("ages ", CORRECTED_AGE_MIN, "-", AGE_MAX - 1,
+                   " (matches the corrected estimate)"))
+) %>% mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: raw-reliability
+
+# The uncorrected measure should track reliability. If it does, that is the
+# confound showing itself directly.
+child_parts %>%
+  group_by(category) %>%
+  summarise(n = sum(!is.na(reliability)),
+            r_with_reliability = round(safe_cor(reliability, raw), 2),
+            .groups = "drop") %>%
+  show_all()
+```
+
+```{r}
+#| label: scale-check
+# `raw` and `reliability` are Spearman. The corrected estimator's num and den
+# are Pearson covariances, because the cross-trial identity
+# E[cov(y_i,a) cov(y_j,a)] = cov(t,a)^2 does not hold for ranks. The two
+# scales therefore sit side by side in the ceiling comparison below. This
+# bounds what that mismatch costs: if r_between is near 1 the comparison is
+# safe to read, and if it is not, the ceiling column is the one to distrust.
+participant_dist_vecs(fp) %>%
+  filter(category %in% usable) %>%
+  mutate(category = as.character(category),
+         spearman = map2_dbl(dvec, category,
+                             ~ cor(.x, refs[[.y]], method = "spearman")),
+         pearson  = map2_dbl(dvec, category,
+                             ~ cor(.x, refs[[.y]], method = "pearson"))) %>%
+  group_by(category) %>%
+  summarise(n = n(),
+            mean_spearman = round(mean(spearman, na.rm = TRUE), 3),
+            mean_pearson  = round(mean(pearson,  na.rm = TRUE), 3),
+            r_between     = round(safe_cor(spearman, pearson), 3),
+            .groups = "drop") %>%
+  show_all()
+```
+
+# Corrected similarity
+
+The estimate is a squared correlation and is kept on that scale. Square roots appear alongside for readability and are never the test statistic: taking the root requires truncating at 1, and truncation bites hardest in the low-reliability young cells, which inflates the age slope.
+
+Four-year-olds are excluded from every estimate and every test. At a reliability near .03 the pooled denominator straddles zero and the ratio has no usable sampling distribution. `cells_all` extends to the full age range for the figures only, so that the exclusion is visible rather than silent; nothing is tested on it.
+
+```{r}
+#| label: corrected
+cp <- child_parts %>% filter(age_bin >= CORRECTED_AGE_MIN)
+
+cells_from <- function(d) {
+  d %>%
+    mutate(category = as.character(category)) %>%
+    group_by(category, age_bin) %>%
+    summarise(n = n(), N = sum(num), D = sum(den), .groups = "drop") %>%
+    filter(n >= MIN_BIN_N) %>%
+    mutate(r2 = pmap_dbl(list(N, D, category),
+                         ~ pool_r2(..1, ..2, var_ref[[..3]])),
+           r = r_from_r2(r2))
+}
+
+cells     <- cells_from(cp)            # the analysis set
+cells_all <- cells_from(child_parts)   # figures only
+
+cells %>%
+  mutate(across(c(r2, r), ~ round(.x, 3))) %>%
+  select(category, age_bin, n, r2, r) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+```{r}
+#| label: slope
+# Resamples whole children with all their domains, stratified by age band.
+# Resampling rows instead understates the standard error, because a child's
+# domains are not independent observations.
+boot_slope <- function(d, n_boot = N_BOOT) {
+  d <- mutate(d, category = as.character(category))
+  multi <- n_distinct(d$category) > 1
+  ids <- distinct(d, participant_id, age_bin)
+  by_band <- split(ids$participant_id, ids$age_bin)
+  rows_of <- split(seq_len(nrow(d)), d$participant_id)
+
+  cells_of <- function(rows) {
+    d[rows, ] %>%
+      group_by(category, age_bin) %>%
+      summarise(n = n(),
+                r2 = pool_r2(num, den, var_ref[[first(category)]]),
+                .groups = "drop") %>%
+      filter(n >= MIN_BIN_N, is.finite(r2))
+  }
+
+  fit <- function(tb) {
+    if (n_distinct(tb$age_bin) < 3) return(NA_real_)
+    form <- if (multi && n_distinct(tb$category) > 1) {
+      r2 ~ age_bin + factor(category)
+    } else {
+      r2 ~ age_bin
+    }
+    unname(coef(lm(form, data = tb, weights = tb$n))["age_bin"])
+  }
+
+  obs <- fit(cells_of(seq_len(nrow(d))))
+  reps <- replicate(n_boot, {
+    drawn <- unlist(lapply(by_band,
+                           function(i) sample(i, length(i), replace = TRUE)))
+    fit(cells_of(unlist(rows_of[drawn], use.names = FALSE)))
+  })
+
+  # Percentile interval, not slope/SE: the sampling distribution is
+  # heavy-tailed when cells hold low-reliability children.
+  tibble(slope = obs,
+         lo = unname(quantile(reps, .025, na.rm = TRUE)),
+         hi = unname(quantile(reps, .975, na.rm = TRUE)),
+         sd_reps = sd(reps, na.rm = TRUE),
+         iqr_reps = unname(diff(quantile(reps, c(.25, .75), na.rm = TRUE))),
+         p = max(2 / n_boot, 2 * min(mean(reps <= 0, na.rm = TRUE),
+                                     mean(reps >= 0, na.rm = TRUE))),
+         n_children = n_distinct(d$participant_id),
+         n_valid_reps = sum(is.finite(reps)))
+}
+
+set.seed(42)
+slope_overall <- boot_slope(cp)
+
+slope_overall %>%
+  mutate(sd_over_iqr = round(sd_reps / iqr_reps, 2),
+         across(where(is.numeric), ~ signif(.x, 4))) %>%
+  show_all()
+```
+
+`sd_over_iqr` well above 1.35 means the bootstrap distribution is heavy-tailed and the percentile interval, not a normal one, is the valid summary.
+
+```{r}
+#| label: slope-domain
+set.seed(42)
+slope_domain <- cp %>%
+  group_by(category) %>%
+  filter(n_distinct(age_bin) >= 3) %>%
+  group_split() %>%
+  map_dfr(~ boot_slope(.x) %>%
+            mutate(category = unique(as.character(.x$category)), .before = 1))
+
+slope_domain %>%
+  select(category, n_children, slope, lo, hi, p) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 4))) %>% show_all()
+```
+
+# Against the ceiling
+
+Separates "how far from adult-like" from "how far from measurable at all".
+
+```{r}
+#| label: ceiling-gap
+# Full age range: the join against `cells` restricts the table itself to the
+# tested bands, while `ceil_all` carries the ceiling line for the figures.
+rel_by_age <- cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category, age_bin) %>%
+  summarise(n_rel = n(), mean_rel = mean(consistency), .groups = "drop") %>%
+  mutate(category = as.character(category))
+
+ceil_all <- rel_by_age %>%
+  filter(n_rel >= MIN_BIN_N) %>%
+  mutate(ceiling = sqrt(sb(mean_rel, 2)))
+
+gap <- cells %>%
+  inner_join(rel_by_age, by = c("category", "age_bin")) %>%
+  left_join(S$adult_ceiling %>%
+              select(category, adult_loo = loo) %>%
+              mutate(category = as.character(category)),
+            by = "category") %>%
+  mutate(ceiling = sqrt(sb(mean_rel, 2)),
+         pct_of_ceiling = round(100 * r / ceiling, 1),
+         gap = round(ceiling - r, 3),
+         across(c(r, ceiling, adult_loo), ~ round(.x, 3)))
+
+gap %>%
+  select(category, age_bin, n, r, ceiling, pct_of_ceiling, gap, adult_loo) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+```{r}
+#| label: fig-corrected
+#| fig-width: 7.5
+#| fig-height: 4.2
+# Hollow points are below CORRECTED_AGE_MIN: plotted for completeness, not
+# interpretable, and excluded from every test above.
+corr_pts <- cells_all %>%
+  mutate(usable = age_bin >= CORRECTED_AGE_MIN,
+         category = fct_domain(category))
+
+ggplot(corr_pts, aes(age_bin, r, colour = category)) +
+  geom_line(linetype = 2, linewidth = .5) +
+  geom_line(data = filter(corr_pts, usable), linewidth = .8) +
+  geom_line(data = mutate(ceil_all, category = fct_domain(category)),
+            aes(age_bin, ceiling, colour = category),
+            linetype = 3, linewidth = .6) +
+  geom_point(data = filter(corr_pts, !usable), shape = 21, fill = "white",
+             size = 2.6, stroke = 1) +
+  geom_point(data = filter(corr_pts, usable), aes(size = n)) +
+  scale_colour_manual(values = PALETTE) +
+  scale_size_continuous(range = c(1.8, 4), guide = "none") +
+  scale_x_continuous(breaks = AGE_MIN:(AGE_MAX - 1)) +
+  labs(x = "age band", y = "corrected similarity to adults", colour = NULL,
+       title = "Corrected child-adult similarity, with the reliability ceiling",
+       subtitle = paste0("Dotted: the highest correlation the data could show. ",
+                         "Hollow: below age ", CORRECTED_AGE_MIN, "."))
+```
+
+# Corrected against uncorrected
+
+If reliability is the confound, these **converge** with age. The uncorrected estimate is the corrected one multiplied by the ceiling, and the ceiling rises with reliability, so the gap between them narrows as children get more consistent. A constant gap would be the surprise.
+
+```{r}
+#| label: attenuation
+# Both estimates over the full age range. The divergence test runs on the
+# tested bands only.
+raw_by_cell <- child_parts %>%
+  mutate(category = as.character(category)) %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), raw = mean(raw, na.rm = TRUE), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N)
+
+compare <- cells_all %>%
+  select(category, age_bin, n, corrected = r) %>%
+  inner_join(select(raw_by_cell, category, age_bin, raw),
+             by = c("category", "age_bin")) %>%
+  mutate(usable = age_bin >= CORRECTED_AGE_MIN,
+         difference = round(raw - corrected, 3),
+         across(c(corrected, raw), ~ round(.x, 3)))
+
+compare %>% arrange(category, age_bin) %>% show_all()
+
+compare %>%
+  filter(usable) %>%
+  group_by(category) %>%
+  filter(n() >= 3) %>%
+  nest() %>%
+  mutate(t = map(data, ~ tidy(lm(difference ~ age_bin, data = .x,
+                                 weights = .x$n)))) %>%
+  select(-data) %>% unnest(t) %>% filter(term == "age_bin") %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: fig-attenuation
+#| fig-width: 7.5
+#| fig-height: 4.2
+att <- compare %>%
+  pivot_longer(c(corrected, raw), names_to = "estimate", values_to = "value") %>%
+  mutate(category = fct_domain(category),
+         shown = usable | estimate == "raw")
+
+ggplot(att, aes(age_bin, value, colour = estimate)) +
+  geom_line(linetype = 2, linewidth = .5) +               # full span, dashed
+  geom_line(data = filter(att, shown), linewidth = .9) +  # tested span, solid
+  geom_point(data = filter(att, !shown), shape = 21, fill = "white",
+             size = 2.4, stroke = 1) +
+  geom_point(data = filter(att, shown), size = 2.4) +
+  facet_wrap(~ category) +
+  scale_colour_manual(values = c(corrected = "#0F728B", raw = "#B43359")) +
+  scale_x_continuous(breaks = AGE_MIN:(AGE_MAX - 1)) +
+  labs(x = "age band", y = "similarity to adults", colour = NULL,
+       title = "Uncorrected and corrected estimates by age",
+       subtitle = paste0("Hollow: corrected estimate below age ",
+                         CORRECTED_AGE_MIN, " — plotted, not interpretable"))
+```
+
+```{r}
+#| label: age-cell-detail
+# Everything that goes into one cell, so a non-monotone corrected estimate can
+# be read rather than guessed at. `naive_corr` is raw divided by the ceiling:
+# a cruder correction using the same reliability but none of the cross-trial
+# machinery. If naive_corr and r move together across age, the shape is driven
+# by reliability; if only r moves, it is estimator noise in that cell. `n` is
+# the check on the other side — a cell near the MIN_BIN_N floor is the one to
+# distrust first.
+cells_all %>%
+  select(category, age_bin, n, r2, r) %>%
+  inner_join(select(raw_by_cell, category, age_bin, raw),
+             by = c("category", "age_bin")) %>%
+  inner_join(select(rel_by_age, category, age_bin, mean_rel),
+             by = c("category", "age_bin")) %>%
+  mutate(ceiling = sqrt(sb(mean_rel, 2)),
+         naive_corr = raw / ceiling,
+         tested = age_bin >= CORRECTED_AGE_MIN,
+         across(where(is.numeric), ~ round(.x, 3))) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+# Robustness
+
+Three checks on choices the analysis above makes silently: that age enters linearly, that nothing in the figures is an artifact of a smoother, and that a domain's pair count is not driving its slope.
+
+```{r}
+#| label: linearity
+# Every slope in the pipeline is linear in age. Checked on the per-child
+# uncorrected measure, the only place age is continuous — the corrected
+# estimate exists at four age bands and cannot support a smooth. edf near 1
+# and a non-significant quadratic term mean linear is adequate.
+child_parts %>%
+  group_by(category) %>%
+  nest() %>%
+  mutate(out = map(data, function(d) {
+    g <- summary(gam(raw ~ s(age, k = 5), data = d, method = "REML"))
+    tibble(n = nrow(d),
+           gam_edf = round(g$s.table[1, "edf"], 2),
+           quad_p = signif(anova(lm(raw ~ age, d),
+                                 lm(raw ~ poly(age, 2), d))$`Pr(>F)`[2], 3))
+  })) %>%
+  select(-data) %>% unnest(out) %>% ungroup() %>% show_all()
+```
+
+```{r}
+#| label: fig-span
+#| fig-width: 9.5
+#| fig-height: 3.6
+# LOESS curvature can belong to the smoother rather than the data. The fits
+# are computed explicitly per span: passing a `span` column to geom_smooth()
+# does nothing, so a faceted plot would silently draw the same default span
+# three times.
+loess_fits <- map_dfr(c(0.5, 0.75, 1.0), function(sp) {
+  child_parts %>%
+    group_by(category) %>%
+    nest() %>%
+    mutate(fit = map(data, function(d) {
+      grid <- tibble(age = seq(min(d$age), max(d$age), length.out = 60))
+      grid$y <- predict(loess(raw ~ age, data = d, span = sp, degree = 1),
+                        newdata = grid)
+      grid
+    })) %>%
+    select(-data) %>% unnest(fit) %>% ungroup() %>%
+    mutate(span = paste("span =", sp))
+})
+
+ggplot(child_parts, aes(age, raw, colour = category)) +
+  geom_point(alpha = .2, size = 1) +
+  geom_line(data = loess_fits, aes(age, y, colour = category), linewidth = .9) +
+  facet_wrap(~ span) +
+  scale_colour_manual(values = PALETTE) +
+  scale_x_continuous(breaks = AGE_MIN:(AGE_MAX - 1)) +
+  labs(x = "age (years)", y = "uncorrected similarity to adults",
+       colour = NULL,
+       title = "LOESS fits at three spans",
+       subtitle = "A shape that changes across panels belongs to the smoother")
+```
+
+```{r}
+#| label: pair-count-control
+# Emotions has 6 concepts (15 pairs); the object domains have 12 (66). Fewer
+# pairs makes each per-child estimate noisier, which flattens an age slope on
+# its own. Subsample the object domains to 6 concepts and refit: if their
+# slopes survive at 15 pairs, emotions' flatness is not a pair-count artifact.
+#
+# Point slope per draw, no inner bootstrap, so N_SUB draws stay affordable.
+set.seed(7)
+N_SUB <- 50
+
+sub_slope <- function(cat_name, n_concepts = 6) {
+  pool <- sort(unique(fp$base_name[fp$category == cat_name]))
+  if (length(pool) <= n_concepts) return(NA_real_)
+  keep <- sample(pool, n_concepts)
+
+  # Filtering the long RDM and re-sorting by pair_index gives the subset's own
+  # column-major lower triangle: restricting to a subset preserves that order,
+  # so this matches what dist() produces on the 6 retained concepts.
+  ref_sub <- adult_rdm %>%
+    filter(domain == cat_name, concept_a %in% keep, concept_b %in% keep) %>%
+    arrange(pair_index) %>% pull(distance)
+  if (length(ref_sub) != n_concepts * (n_concepts - 1) / 2) return(NA_real_)
+
+  tb <- trial_dist_vecs(filter(fp, category == cat_name,
+                               base_name %in% keep)) %>%
+    group_by(participant_id) %>%
+    filter(n() >= MIN_TRIALS) %>%
+    summarise(p = list(cross_trial_parts(dvec, ref_sub)), .groups = "drop") %>%
+    unnest_wider(p) %>%
+    inner_join(S$age, by = "participant_id") %>%
+    add_age_bins() %>%
+    filter(age_bin >= CORRECTED_AGE_MIN) %>%
+    group_by(age_bin) %>%
+    summarise(n = n(),
+              r2 = pool_r2(sum(num), sum(den), ref_variance(ref_sub)),
+              .groups = "drop") %>%
+    filter(n >= MIN_BIN_N, is.finite(r2))
+
+  if (n_distinct(tb$age_bin) < 3) return(NA_real_)
+  unname(coef(lm(r2 ~ age_bin, data = tb, weights = tb$n))["age_bin"])
+}
+
+# Observed slopes on the same scale: the weighted fit across cells, which is
+# what boot_slope() reports as its point estimate.
+observed_slope <- cells %>%
+  group_by(category) %>%
+  filter(n_distinct(age_bin) >= 3) %>%
+  nest() %>%
+  mutate(slope = map_dbl(data, ~ unname(coef(lm(r2 ~ age_bin, data = .x,
+                                         weights = .x$n))["age_bin"]))) %>%
+  ungroup() %>% select(category, slope)
+
+bind_rows(
+  map_dfr(intersect(CONCEPTUAL_DOMAINS, usable), function(cn) {
+    s <- replicate(N_SUB, sub_slope(cn))
+    tibble(domain = paste0(cn, " (6 of 12 concepts)"),
+           slope = mean(s, na.rm = TRUE),
+           lo = unname(quantile(s, .025, na.rm = TRUE)),
+           hi = unname(quantile(s, .975, na.rm = TRUE)),
+           n_draws_ok = sum(is.finite(s)))
+  }),
+  observed_slope %>% transmute(domain = paste0(category, " (all concepts)"),
+                               slope, lo = NA_real_, hi = NA_real_,
+                               n_draws_ok = NA_integer_)
+) %>% mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+# Where the structures differ
+
+Child trees with leaves coloured by the adult cluster assignment, so what changes is visible rather than only summarised by a correlation.
+
+```{r}
+#| label: adult-clusters
+adult_cl <- S$adult_rdm %>%
+  filter(domain %in% usable) %>%
+  arrange(domain, pair_index) %>%
+  group_by(domain) %>%
+  summarise(concepts = list(sort(unique(c(concept_a, concept_b)))),
+            ref = list(distance), .groups = "drop") %>%
+  mutate(cl = map2(ref, concepts,
+                   ~ cutree(hclust(as_dist_vec(.x, .y), method = LINKAGE),
+                            k = K_CLUSTER)))
+
+child_trees <- participant_dist_vecs(fp) %>%
+  filter(category %in% usable) %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  group_by(category, age_group) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  summarise(n = n(), mean_vec = list(reduce(dvec, `+`) / length(dvec)),
+            concepts = list(first(concepts)), .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, age_group)
+
+child_trees %>% select(category, age_group, n) %>% show_all()
+```
+
+```{r}
+#| label: fig-adult-coloured
+#| fig-width: 10
+#| fig-height: 4
+for (dom in levels(child_trees$category)) {
+  sub <- filter(child_trees, category == dom)
+  if (!nrow(sub)) next
+  ac <- filter(adult_cl, domain == dom)
+  if (!nrow(ac)) next
+  lab_col <- CLUST_COLS[ac$cl[[1]]]
+  names(lab_col) <- ac$concepts[[1]]
+
+  op <- par(mfrow = c(1, nrow(sub)), mar = c(7, 2, 3, 1))
+  pwalk(list(sub$mean_vec, sub$concepts, sub$age_group, sub$n),
+        function(v, cs, a, n) {
+          d <- as.dendrogram(hclust(as_dist_vec(v, cs), method = LINKAGE))
+          dendextend::labels_colors(d) <- lab_col[labels(d)]
+          d <- dendextend::set(d, "branches_lwd", 2)
+          d <- dendextend::set(d, "labels_cex", 0.8)
+          plot(d, main = paste0(dom, ", age ", a, " (n=", n, ")"))
+        })
+  par(op)
+  cat("\nLeaf colours are the adult cluster assignment for", dom, "\n")
+}
+```
+
+```{r}
+#| label: linkage-check
+# Average linkage is a choice. If the adult cluster solution the colours above
+# depend on changes under Ward or complete linkage, the figure is showing the
+# linkage rather than the data. Reported as the adjusted Rand index against
+# the average-linkage solution; near 1 means the choice does not matter.
+map_dfr(c("average", "ward.D2", "complete"), function(meth) {
+  adult_cl %>%
+    mutate(alt = map2(ref, concepts,
+                      ~ cutree(hclust(as_dist_vec(.x, .y), method = meth),
+                               k = K_CLUSTER)),
+           ari = map2_dbl(cl, alt, ~ mclust::adjustedRandIndex(.x, .y))) %>%
+    transmute(linkage = meth, domain, ari = round(ari, 3))
+}) %>%
+  pivot_wider(names_from = linkage, values_from = ari) %>%
+  show_all()
+```

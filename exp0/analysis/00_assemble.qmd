@@ -1,0 +1,643 @@
+---
+title: "KidsNet Study 1 — Assembly and exclusions"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+Loads the Study 1 children and the adult reference, applies every exclusion once, and writes `analysis_sample.rds`. Parts 1–3 read that file and nothing else. Study 2 (`data_v5`) is not touched anywhere in this pipeline.
+
+```{r}
+#| label: setup
+# Configuration and shared functions. setup.R is the single source of truth
+# for every constant and helper used below.
+source(here::here("setup.R"))
+```
+
+# Load the children
+
+```{r}
+#| label: load-children
+children <- load_placements(CHILD_DIR, CHILD_LABEL)
+
+# Keep the unparsed rows now. They carry the practice trials, which the
+# comprehension scoring needs, and `children` is reassigned twice below;
+# whether a custom attribute survives a dplyr verb is an implementation
+# detail not worth depending on.
+raw_rows <- attr(children, "raw")
+stopifnot(is.data.frame(raw_rows), nrow(raw_rows) > 0)
+
+# No column here may be called `children`: inside tibble() a new column is
+# visible to every later argument, so it would shadow the data frame.
+tibble(n_children = n_distinct(children$participant_id),
+       n_rows = nrow(children),
+       domains = paste(sort(unique(na.omit(children$category))), collapse = ", "),
+       domain_on_row = "category_on_row" %in% names(children)) %>%
+  show_all()
+```
+
+```{r}
+#| label: untagged
+untagged <- children %>% filter(is.na(category)) %>%
+  distinct(raw_name, image_name)
+if (nrow(untagged)) {
+  show_all(untagged)
+} else {
+  cat("All images mapped to a domain.\n")
+}
+
+off_domain <- children %>%
+  filter(!is.na(category), !category %in% DOMAINS) %>%
+  count(category, name = "rows")
+if (nrow(off_domain)) {
+  show_all(off_domain)
+} else {
+  cat("No images outside", paste(DOMAINS, collapse = ", "), "\n")
+}
+
+children <- children %>% filter(category %in% DOMAINS)
+```
+
+# Arena geometry
+
+Measured from the data rather than assumed, and used for one thing only: to confirm the child and adult arenas are the same size. Distances are raw pixels, so a different clamp would put the two groups on different scales and corrupt every child-adult correlation without raising an error.
+
+```{r}
+#| label: geometry
+geom_child <- infer_geometry(children)
+describe_geometry(geom_child) %>%
+  mutate(who = "children", .before = 1) %>% show_all()
+```
+
+# Trial structure
+
+```{r}
+#| label: structure
+children %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name), n_images = n(),
+            exemplars = paste(sort(unique(exemplar)), collapse = "+"),
+            pic_set = paste(sort(unique(picture_set)), collapse = "+"),
+            .groups = "drop") %>%
+  count(category, exemplars, pic_set, n_concepts, n_images) %>%
+  arrange(category) %>%
+  show_all()
+
+# Animals and plants: 12 concepts, one photograph each. Emotions: 6 concepts,
+# two photographs each. Anything else means the stimulus list has drifted.
+odd <- children %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name), n_images = n(),
+            .groups = "drop") %>%
+  mutate(expected = if_else(category == "emotions", 6L, 12L)) %>%
+  filter(n_images != ITEMS_PER_TRIAL | n_concepts != expected)
+
+if (nrow(odd)) {
+  show_all(odd)
+} else {
+  cat("Every trial has", ITEMS_PER_TRIAL,
+      "images and the expected concept count.\n")
+}
+```
+
+```{r}
+#| label: trials
+children %>%
+  distinct(participant_id, category, trial) %>%
+  count(participant_id, category, name = "n_trials") %>%
+  count(category, n_trials) %>%
+  pivot_wider(names_from = n_trials, values_from = n,
+              names_prefix = "children_with_", values_fill = 0) %>%
+  show_all()
+```
+
+# Age
+
+```{r}
+#| label: age
+age_raw <- read_csv(AGE_FILE, show_col_types = FALSE)
+cat("columns:", paste(names(age_raw), collapse = ", "), "\n")
+
+age_df <- age_raw %>% mutate(participant_id = as.character(participant_id))
+
+if (all(c("dob", "test_date") %in% names(age_df))) {
+  age_df <- mutate(age_df,
+    age = as.numeric(as.Date(test_date) - as.Date(dob)) / 365.25)
+  cat("age computed from dob and test_date\n")
+} else {
+  cat("using the precomputed age column\n")
+}
+
+age_df <- select(age_df, participant_id, age)
+
+# Reported, not acted on, except for the age window itself.
+age_audit <- age_df %>%
+  semi_join(distinct(children, participant_id), by = "participant_id") %>%
+  mutate(missing  = is.na(age),
+         outside  = !missing & (age < AGE_MIN | age >= AGE_MAX),
+         boundary = !missing & (abs(age - AGE_MIN) < 0.02 |
+                                abs(age - AGE_MAX) < 0.02),
+         # A whole number in a column otherwise carrying nine decimals is
+         # more likely a placeholder than a measurement.
+         suspect_integer = !missing & abs(age - round(age)) < 1e-9)
+
+age_audit %>%
+  summarise(n = n(), missing = sum(missing), outside = sum(outside),
+            boundary = sum(boundary),
+            suspect_integer = sum(suspect_integer)) %>%
+  show_all()
+
+age_audit %>%
+  filter(missing | outside | suspect_integer) %>%
+  select(participant_id, age, missing, outside, suspect_integer) %>%
+  arrange(age) %>% show_all()
+
+age_df <- filter(age_df, !is.na(age))
+```
+
+# Comprehension
+
+Practice trial 2, scored against the acceptable-neighbour sets. Croissant is in the trial but is not scored, and is allowed as a neighbour for the sweets.
+
+```{r}
+#| label: comprehension
+comprehension <- score_comprehension(raw_rows)
+
+cat("checks available:", N_CHECKS, "| threshold:", MIN_CHECKS, "\n\n")
+
+comprehension %>%
+  count(n_checks, n_ok, name = "children") %>%
+  mutate(pct = round(100 * children / sum(children), 1)) %>%
+  show_all()
+
+comprehension %>%
+  inner_join(age_df, by = "participant_id") %>%
+  filter(age >= AGE_MIN, age < AGE_MAX) %>%
+  mutate(age_years = floor(age)) %>%
+  group_by(age_years) %>%
+  summarise(n = n(), mean_n_ok = round(mean(n_ok), 2),
+            pct_pass = round(100 * mean(n_ok >= MIN_CHECKS), 1),
+            .groups = "drop") %>%
+  show_all()
+```
+
+# Exclusions
+
+```{r}
+#| label: exclusions
+cons_all <- compute_consistency(children)
+
+enrolled <- children %>%
+  distinct(participant_id) %>%
+  as_tibble() %>%
+  left_join(age_df, by = "participant_id") %>%
+  left_join(comprehension, by = "participant_id") %>%
+  left_join(
+    children %>%
+      distinct(participant_id, category, trial) %>%
+      count(participant_id, category, name = "nt") %>%
+      group_by(participant_id) %>%
+      summarise(n_domains = n(), min_trials = min(nt), max_trials = max(nt),
+                .groups = "drop"),
+    by = "participant_id") %>%
+  mutate(
+    has_age    = !is.na(age),
+    in_age     = has_age & age >= AGE_MIN & age < AGE_MAX,
+    has_compr  = !is.na(n_ok),
+    pass_compr = !APPLY_COMPREHENSION | (has_compr & n_ok >= MIN_CHECKS),
+    reason = case_when(
+      !has_age                         ~ "no age on file",
+      !in_age                          ~ paste0("age outside [", AGE_MIN,
+                                                ", ", AGE_MAX, ")"),
+      APPLY_COMPREHENSION & !has_compr ~ "no scoreable practice trial",
+      !pass_compr                      ~ paste0("comprehension < ", MIN_CHECKS,
+                                                "/", N_CHECKS),
+      n_domains < 1                    ~ "no usable domain",
+      max_trials < MIN_TRIALS          ~ paste0("no domain with ", MIN_TRIALS,
+                                                " trials"),
+      TRUE                             ~ "included"),
+    included = reason == "included")
+
+cat("APPLY_COMPREHENSION =", APPLY_COMPREHENSION,
+    "| MIN_CHECKS =", MIN_CHECKS,
+    "| MIN_TRIALS =", MIN_TRIALS,
+    "| age in [", AGE_MIN, ",", AGE_MAX, ")\n\n")
+
+enrolled %>% count(reason, name = "n") %>% arrange(desc(n)) %>% show_all()
+
+enrolled %>% filter(!included) %>%
+  select(participant_id, age, n_ok, n_domains, max_trials, reason) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2))) %>%
+  arrange(reason, participant_id) %>% show_all()
+```
+
+```{r}
+#| label: apply-exclusions
+keep <- enrolled %>% filter(included) %>% select(participant_id)
+
+# Trial count is a property of a domain, not of a child: a child short a
+# trial in one domain keeps the others.
+nt <- children %>%
+  distinct(participant_id, category, trial) %>%
+  count(participant_id, category, name = "nt")
+
+# A trial with the wrong number of concepts yields a distance vector of the
+# wrong length. Averaging across children would then recycle it silently
+# rather than fail, so those child-domains are dropped here.
+bad_shape <- children %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name), .groups = "drop") %>%
+  mutate(expected = if_else(category == "emotions", 6L, 12L)) %>%
+  filter(n_concepts != expected) %>%
+  distinct(participant_id, category)
+
+if (nrow(bad_shape)) {
+  cat("Child-domains dropped for an unexpected concept count:\n")
+  bad_shape %>% count(category, name = "n") %>% show_all()
+}
+
+keep_domain <- nt %>% filter(nt >= MIN_TRIALS) %>%
+  select(participant_id, category) %>%
+  anti_join(bad_shape, by = c("participant_id", "category"))
+
+dropped <- nt %>% filter(nt < MIN_TRIALS)
+if (nrow(dropped)) {
+  cat("Child-domains dropped for having fewer than", MIN_TRIALS, "trials:\n")
+  dropped %>% count(category, nt, name = "n") %>% show_all()
+}
+
+fp <- children %>%
+  semi_join(keep, by = "participant_id") %>%
+  semi_join(keep_domain, by = c("participant_id", "category"))
+
+cons <- cons_all %>%
+  semi_join(keep, by = "participant_id") %>%
+  semi_join(keep_domain, by = c("participant_id", "category")) %>%
+  inner_join(age_df, by = "participant_id") %>%
+  add_age_bins()
+
+stopifnot(
+  # all() of an empty vector is TRUE, so the checks below would pass
+  # vacuously on an empty result. Assert something survived first.
+  nrow(fp) > 0, nrow(cons) > 0,
+  nrow(anti_join(distinct(fp, participant_id), keep,
+                 by = "participant_id")) == 0,
+  nrow(anti_join(distinct(cons, participant_id), keep,
+                 by = "participant_id")) == 0,
+  nrow(anti_join(distinct(fp, participant_id, category), keep_domain,
+                 by = c("participant_id", "category"))) == 0,
+  all(cons$age >= AGE_MIN & cons$age < AGE_MAX),
+  all(fp$category %in% DOMAINS))
+
+fp %>% distinct(participant_id, category) %>%
+  count(category, name = "children") %>%
+  arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+
+enrolled %>% filter(included) %>%
+  mutate(age_years = floor(age)) %>%
+  count(age_years, name = "children") %>%
+  mutate(in_corrected_analyses = age_years >= CORRECTED_AGE_MIN) %>%
+  show_all()
+```
+
+# Adults
+
+Adults were run on all six domains. Their files are parsed in full, then restricted to the three Study 1 domains.
+
+```{r}
+#| label: adults
+adults <- load_placements(ADULT_DIR, "adult",
+                          normalize_ids = FALSE,
+                          use_category_order = TRUE)
+
+# Grabbed before any dplyr verb: the raw attribute does not survive one, and
+# the comprehension screen below needs the practice rows.
+adult_raw_rows <- attr(adults, "raw")
+stopifnot(is.data.frame(adult_raw_rows), nrow(adult_raw_rows) > 0)
+
+tibble(n_adults = n_distinct(adults$participant_id),
+       n_rows = nrow(adults),
+       domains = paste(sort(unique(na.omit(adults$category))),
+                       collapse = ", ")) %>%
+  show_all()
+
+cat("\nFirst three adult ids:",
+    paste(head(unique(adults$participant_id), 3), collapse = ", "), "\n")
+
+dis <- attr(adults, "category_disagreement")
+if (!is.null(dis) && nrow(dis)) {
+  show_all(dis)
+} else {
+  cat("category_order agrees with the filenames on every block.\n")
+}
+
+geom_adult <- infer_geometry(adults)
+describe_geometry(geom_adult) %>%
+  mutate(who = "adults", .before = 1) %>% show_all()
+
+if (abs(geom_adult$x_min - geom_child$x_min) > 1 ||
+    abs(geom_adult$x_max - geom_child$x_max) > 1) {
+  cat("\nChild and adult arenas differ at the clamp. Distances are then not on",
+      "the same scale and the child-adult comparison needs rescaling.\n")
+}
+
+adults <- adults %>% filter(!is.na(category), category %in% DOMAINS)
+```
+
+## Comprehension
+
+Adults see a different practice trial from Study 1 children: two hammers, two teddy bears and a block, grouped as tools versus toys, which is the same practice trial Study 2 children get. All five items are scored — for each, is its nearest neighbour an acceptable partner? A hammer's only acceptable neighbour is the other hammer; the block counts as a toy.
+
+Chance is 2.0 of 5, and the probability of reaching 4 by random placement is 15.9%, so this is a real screen rather than a formality.
+
+```{r}
+#| label: adult-comprehension
+adult_compr <- score_comprehension(adult_raw_rows,
+                                   acceptable = PRACTICE_ACCEPTABLE_ADULT)
+
+if (!nrow(adult_compr)) {
+  cat("No scorable adult practice trial", PRACTICE_TRIAL,
+      "- the screen could not be applied.\n")
+} else {
+  cat("checks available:", N_CHECKS_ADULT,
+      "| threshold:", MIN_CHECKS_ADULT, "\n\n")
+
+  adult_compr %>%
+    count(n_checks, n_ok, name = "adults") %>%
+    mutate(pct = round(100 * adults / sum(adults), 1)) %>%
+    show_all()
+
+  # Adults whose practice trial fails. Listed rather than only counted: with
+  # 107 adults the reference barely moves, so the question is whether they
+  # cluster on anything.
+  adult_compr %>%
+    filter(n_ok < MIN_CHECKS_ADULT) %>%
+    arrange(n_ok) %>% show_all()
+}
+
+adults_failing <- adult_compr %>%
+  filter(n_ok < MIN_CHECKS_ADULT) %>% pull(participant_id)
+
+cat("\nAdults below", MIN_CHECKS_ADULT, "of", N_CHECKS_ADULT, ":",
+    length(adults_failing), "of", n_distinct(adults$participant_id), "\n")
+```
+
+Before applying the screen, how much it actually changes the reference. If the two references correlate at essentially 1, the decision does not matter and the paper can say so; if they do not, the screen is doing real work and belongs in the exclusion table rather than in a footnote.
+
+```{r}
+#| label: adult-screen-effect
+if (length(adults_failing)) {
+  ref_of <- function(df) {
+    participant_dist_vecs(df) %>%
+      group_by(category) %>%
+      summarise(ref = list(reduce(dvec, `+`) / length(dvec)), .groups = "drop")
+  }
+
+  ref_of(adults) %>%
+    rename(ref_all = ref) %>%
+    inner_join(ref_of(filter(adults,
+                             !participant_id %in% adults_failing)) %>%
+                 rename(ref_kept = ref),
+               by = "category") %>%
+    mutate(r = map2_dbl(ref_all, ref_kept,
+                        ~ cor(.x, .y, method = "spearman")),
+           max_shift_px = map2_dbl(ref_all, ref_kept,
+                                   ~ max(abs(.x - .y)))) %>%
+    transmute(category, r = round(r, 4), max_shift_px = round(max_shift_px, 1)) %>%
+    arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+} else {
+  cat("No adult failed the screen; the reference is unchanged.\n")
+}
+
+if (APPLY_ADULT_COMPREHENSION && length(adults_failing)) {
+  adults <- filter(adults, !participant_id %in% adults_failing)
+  cat("\nApplied: dropped", length(adults_failing), "adults.",
+      n_distinct(adults$participant_id), "remain.\n")
+} else if (length(adults_failing)) {
+  cat("\nReported only - APPLY_ADULT_COMPREHENSION is FALSE.\n")
+}
+```
+
+```{r}
+#| label: adult-pdv
+adult_pdv <- participant_dist_vecs(adults)
+adult_pdv %>% count(category, name = "adults") %>%
+  arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+```
+
+```{r}
+#| label: adult-flat
+# An adult who barely moved anything has a near-degenerate vector and would
+# distort the mean reference.
+adults %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(spread = sd(posX) + sd(posY), .groups = "drop") %>%
+  group_by(participant_id) %>%
+  summarise(min_spread = round(min(spread), 1), .groups = "drop") %>%
+  arrange(min_spread) %>% head(5) %>% show_all()
+```
+
+```{r}
+#| label: adult-demographics
+# load_placements() keeps only arrangement rows, so the survey is read
+# separately. Prolific demographics arrive as a JSON response on a
+# survey-html-form row.
+adult_demo <- list.files(ADULT_DIR, pattern = "\\.csv$", full.names = TRUE) %>%
+  map_dfr(~ read_csv(.x, col_types = cols(.default = "c"))) %>%
+  filter(trial_type == "survey-html-form", !is.na(response)) %>%
+  distinct(participant_id, response) %>%
+  mutate(parsed = map(response, ~ as_tibble(jsonlite::fromJSON(.x)))) %>%
+  select(-response) %>% unnest(parsed)
+
+if (!nrow(adult_demo)) {
+  cat("No survey-html-form rows in the adult files.\n")
+} else {
+  if ("age" %in% names(adult_demo)) {
+    adult_demo %>%
+      mutate(age = suppressWarnings(as.numeric(age))) %>%
+      summarise(n = n(),
+                age_mean = round(mean(age, na.rm = TRUE), 1),
+                age_sd   = round(sd(age, na.rm = TRUE), 1),
+                age_min  = suppressWarnings(min(age, na.rm = TRUE)),
+                age_max  = suppressWarnings(max(age, na.rm = TRUE)),
+                age_missing = sum(is.na(age))) %>%
+      show_all()
+  } else {
+    cat("No age field in the adult survey response.\n")
+  }
+}
+```
+
+```{r}
+#| label: adult-reliability
+# Adults did the same two-trial design, so the same test-retest number exists
+# for them. It is the anchor the child reliabilities are read against: a child
+# cell at .30 means one thing if adults sit at .55 and another if they sit at
+# .85.
+adult_consistency <- compute_consistency(adults)
+
+adult_consistency %>%
+  group_by(category) %>%
+  summarise(adults  = sum(!is.na(consistency)),
+            mean_rel = mean(consistency, na.rm = TRUE),
+            sd_rel   = sd(consistency, na.rm = TRUE),
+            min_rel  = suppressWarnings(min(consistency, na.rm = TRUE)),
+            # The ceiling their own reliability implies for a two-trial average.
+            ceiling  = sqrt(sb(mean(consistency, na.rm = TRUE), 2)),
+            .groups = "drop") %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+
+# Adults below the floor a child would be excluded on. Reported, not dropped:
+# the reference is a mean over adults and one inconsistent adult moves it
+# little, but a cluster of them would.
+low <- adult_consistency %>%
+  filter(!is.na(consistency), consistency < 0.2) %>%
+  arrange(consistency) %>%
+  transmute(participant_id, category, consistency = round(consistency, 3))
+
+if (nrow(low)) show_all(low) else
+  cat("No adult-domain below .2 test-retest.\n")
+```
+
+## Reference and ceiling
+
+```{r}
+#| label: adult-reference
+adult_rdm <- adult_pdv %>%
+  group_by(category) %>%
+  summarise(ref = list(reduce(dvec, `+`) / length(dvec)),
+            n_adults = n(), .groups = "drop")
+
+adult_ceiling <- adult_pdv %>%
+  group_by(category) %>%
+  summarise(
+    n_adults = n(),
+    # Leave-one-out: each adult against the mean of the others. This is the
+    # ceiling a child could reach against this reference. Both measures need
+    # at least two adults; combn(1, 2) errors and (k - 1) divides by zero.
+    loo = if (n() < 2) NA_real_ else {
+            v <- dvec; k <- length(v); tot <- reduce(v, `+`)
+            mean(map_dbl(seq_len(k),
+                         ~ cor(v[[.x]], (tot - v[[.x]]) / (k - 1),
+                               method = "spearman"))) },
+    between_adult = if (n() < 2) NA_real_ else
+      mean(combn(length(dvec), 2, function(ix)
+        cor(dvec[[ix[1]]], dvec[[ix[2]]], method = "spearman"))),
+    .groups = "drop")
+
+adult_ceiling %>% mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+```
+
+```{r}
+#| label: adult-ceiling-check
+# Two routes to the same question: how well does one adult match the group?
+#   loo               each adult against the mean of the others, measured
+#   predicted_ceiling what their own test-retest reliability allows
+# The prediction treats the mean of the other adults as noiseless, so it is an
+# upper bound and the shortfall is approximate. A large shortfall means adults
+# disagree with each other beyond what measurement noise explains -- genuine
+# individual differences in the adult reference, which the child comparison
+# then inherits as a hard limit no correction can lift.
+adult_ceiling %>%
+  select(category, n_adults, loo, between_adult) %>%
+  left_join(adult_consistency %>%
+              group_by(category) %>%
+              summarise(mean_rel = mean(consistency, na.rm = TRUE),
+                        .groups = "drop"),
+            by = "category") %>%
+  mutate(predicted_ceiling = sqrt(sb(mean_rel, 2)),
+         shortfall = predicted_ceiling - loo,
+         across(where(is.numeric), ~ round(.x, 3))) %>%
+  arrange(match(category, DOMAIN_LEVELS)) %>% show_all()
+```
+
+```{r}
+#| label: adult-long
+adult_concepts <- adults %>%
+  distinct(category, base_name) %>%
+  group_by(category) %>%
+  summarise(concepts = list(sort(base_name)), .groups = "drop")
+
+# map2 over the list-columns rather than rowwise(): reading back a
+# list-column created in the same rowwise mutate() is ambiguous, and a
+# silently FALSE `same` here would stop the render for no reason.
+concept_check <- adult_concepts %>%
+  mutate(expected   = map(category, ~ sort(DOMAIN_CONCEPTS[[.x]])),
+         same       = map2_lgl(concepts, expected,
+                               ~ identical(as.character(.x), as.character(.y))),
+         only_adult = map2_chr(concepts, expected,
+                               ~ paste(setdiff(.x, .y), collapse = ", ")),
+         only_spec  = map2_chr(concepts, expected,
+                               ~ paste(setdiff(.y, .x), collapse = ", ")))
+
+concept_check %>% select(category, same, only_adult, only_spec) %>% show_all()
+if (any(!concept_check$same)) stop("Adult concepts differ from DOMAIN_CONCEPTS.")
+
+adult_rdm_long <- adult_rdm %>%
+  left_join(adult_concepts, by = "category") %>%
+  mutate(tbl = map2(ref, concepts, function(r, cs) {
+    stopifnot(length(r) == length(cs) * (length(cs) - 1) / 2)
+    bind_cols(pair_labels(cs), distance = r)
+  })) %>%
+  select(domain = category, n_adults, tbl) %>%
+  unnest(tbl)
+
+verify_pair_order(adult_rdm_long)
+adult_rdm_long %>% count(domain, name = "pairs") %>%
+  arrange(match(domain, DOMAIN_LEVELS)) %>% show_all()
+```
+
+# Save
+
+```{r}
+#| label: save
+analysis_sample <- list(
+  children = fp,
+  consistency = cons,
+  age = age_df,
+  age_audit = age_audit,
+  adults = adults,
+  adult_rdm = adult_rdm_long,
+  adult_ceiling = adult_ceiling,
+  adult_consistency = adult_consistency,
+  audit = enrolled,
+  adult_comprehension = adult_compr,
+  adults_failing_comprehension = adults_failing,
+  geometry = list(child = geom_child, adult = geom_adult),
+  config = list(
+    study = CHILD_LABEL,
+    domains = DOMAINS,
+    APPLY_COMPREHENSION = APPLY_COMPREHENSION,
+    MIN_CHECKS = MIN_CHECKS, N_CHECKS = N_CHECKS,
+    APPLY_ADULT_COMPREHENSION = APPLY_ADULT_COMPREHENSION,
+    MIN_CHECKS_ADULT = MIN_CHECKS_ADULT, N_CHECKS_ADULT = N_CHECKS_ADULT,
+    MIN_TRIALS = MIN_TRIALS,
+    AGE_MIN = AGE_MIN, AGE_MAX = AGE_MAX,
+    CORRECTED_AGE_MIN = CORRECTED_AGE_MIN,
+    LINKAGE = LINKAGE, K_CLUSTER = K_CLUSTER, MIN_BIN_N = MIN_BIN_N,
+    n_children = n_distinct(fp$participant_id),
+    built = Sys.time()))
+
+saveRDS(analysis_sample, "analysis_sample.rds")
+write_csv(enrolled, "exclusion_audit.csv")
+write_csv(cons, "consistency_included.csv")
+if (nrow(adult_compr)) write_csv(adult_compr, "adult_comprehension.csv")
+
+children %>%
+  distinct(category, base_name, exemplar, picture_set, image_name) %>%
+  arrange(category, base_name, exemplar) %>%
+  write_csv("concept_inventory.csv")
+
+str(analysis_sample$config, max.level = 1)
+```

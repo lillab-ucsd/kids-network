@@ -1,0 +1,592 @@
+---
+title: "KidsNet — Pilot Analysis (free sort)"
+author: "Junyi Chen"
+format:
+|   html:
+|     toc: true
+|     toc-depth: 2
+|     code-fold: show
+|     df-print: paged
+|     embed-resources: true
+execute:
+|   warning: false
+|   message: false
+editor: visual
+---
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(jsonlite)
+library(here)
+library(mclust)
+library(broom)
+library(lme4)
+library(lmerTest)
+library(dendextend)
+library(ggcorrplot)
+library(emmeans)
+library(conflicted)
+conflicts_prefer(
+  dplyr::filter, dplyr::select, dplyr::mutate, dplyr::summarise,
+  dplyr::count, dplyr::arrange, dplyr::slice, dplyr::rename, dplyr::lag,
+  purrr::map, here::here, lmerTest::lmer,
+  .quiet = TRUE
+)
+```
+
+# Configuration
+
+```{r}
+#| label: config
+BASE_PATH <- here("..", "data")
+FREE_DIR  <- file.path(BASE_PATH, "free_sort")
+AGE_FILE  <- "age_sheet.csv"
+
+AGE_MIN <- 4        # inclusive
+AGE_MAX <- 9        # exclusive
+
+# Comprehension filter. Practice trial 2 shows five food images with an a
+# priori two-group structure; a child passes a check when an anchor item's
+# nearest neighbour is in the acceptable set. MIN_CHECKS of 3 must pass.
+#
+APPLY_COMPREHENSION <- TRUE
+MIN_CHECKS          <- 3
+
+# Optional reliability gate. OFF by default and it should stay off for the
+# primary analysis: selecting on test-retest reliability selects on a noise
+# realisation, which makes the retained children unrepresentative in a way
+# that is hard to reason about. Useful only as a sensitivity check.
+APPLY_RELIABILITY_GATE <- FALSE
+MIN_RELIABILITY        <- 0
+
+MIN_BIN_N <- 5      # age bands smaller than this are dropped from figures
+K_CLUSTER <- 3
+
+PALETTE <- c(animals = "#0F728B", emotions = "#29A099", plants = "#B8860B")
+
+set.seed(42)
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Helpers
+
+```{r}
+#| label: helpers
+normalize_pid <- function(x) {
+  str_extract(as.character(x), "\\d+") %>% str_pad(width = 3, pad = "0") %>%
+    str_c("p", .)
+}
+
+load_folder <- function(folder) {
+  files <- list.files(folder, pattern = "\\.csv$", full.names = TRUE)
+  if (!length(files)) stop("No CSVs found in ", folder)
+  files %>%
+    map_dfr(~ read_csv(.x, col_types = cols(.default = "c"))) %>%
+    mutate(participant_id = normalize_pid(participant_id))
+}
+
+extract_final_placements <- function(row, x_field, y_field,
+                                     source_col = "placements") {
+  raw <- row[[source_col]]
+  if (is.na(raw) || raw == "[]") return(NULL)
+  parsed <- tryCatch(fromJSON(raw), error = function(e) NULL)
+  if (is.null(parsed) || !is.data.frame(parsed)) return(NULL)
+  if (!all(c(x_field, y_field) %in% names(parsed))) return(NULL)
+
+  img_col <- if ("image_name" %in% names(parsed)) "image_name"
+             else if ("image" %in% names(parsed)) "image"
+             else return(NULL)
+
+  parsed$posX <- suppressWarnings(as.numeric(parsed[[x_field]]))
+  parsed$posY <- suppressWarnings(as.numeric(parsed[[y_field]]))
+
+  if ("timestamp" %in% names(parsed)) {
+    parsed <- parsed %>%
+      mutate(timestamp = suppressWarnings(as.numeric(timestamp))) %>%
+      group_by(.data[[img_col]]) %>% arrange(timestamp) %>%
+      slice_tail(n = 1) %>% ungroup()
+  }
+
+  parsed %>%
+    as_tibble() %>%
+    transmute(participant_id = row$participant_id,
+              block = suppressWarnings(as.numeric(row$block)),
+              trial = suppressWarnings(as.numeric(row$trial)),
+              image_name = .data[[img_col]], posX, posY)
+}
+
+tag_categories <- function(df) {
+  df %>%
+    mutate(
+      image_stem = str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+      base_name  = str_remove(image_stem, "_\\d+$"),
+      set        = as.integer(str_extract(image_stem, "\\d+$")),
+      category   = case_when(
+        str_detect(base_name,
+          "^(happy|sad|angry|fearful|surprise|disgust)$") ~ "emotions",
+        str_detect(base_name,
+          "^(horse|lion|wolf|fish|squirrel|sheep|peacock|pigeon|fox|butterfly|ladybug|dolphin)$") ~ "animals",
+        str_detect(base_name,
+          "^(tree|flower|grass|leaf|apple|broccoli|blueberry|acorn|cherry|cactus|cabbage|peanut)$") ~ "plants"
+      ))
+}
+
+add_age_group <- function(df) {
+  df %>% mutate(age_group = as.character(pmin(floor(age), AGE_MAX - 1)))
+}
+
+# Pairwise distances, concepts in sort(base_name) order. EVERYTHING downstream
+# -- including the model RDMs built in Python -- depends on this ordering.
+compute_dist_vec <- function(df) {
+  coords <- df %>% arrange(base_name) %>% select(posX, posY) %>% as.matrix()
+  as.vector(dist(coords))
+}
+
+# Print every row of a table. Deliberately NOT a bare print() with an n
+# argument: when the object is a plain data.frame rather than a tibble, `n`
+# partial-matches `na.print` inside print.default and throws "invalid
+# 'na.print' specification". fromJSON() returns base data.frames and dplyr
+# verbs preserve that class, so several objects here are not tibbles.
+show_all <- function(x, n = Inf) print(tibble::as_tibble(x), n = n)
+
+# Spearman-Brown: averaging 2 trials lifts reliability above the single-trial
+# test-retest r. The ceiling on any model correlation is sqrt of THIS.
+sb2 <- function(r) 2 * pmax(r, 0) / (1 + pmax(r, 0))
+
+# One averaged position per concept per trial (a no-op for animals/plants,
+# which have one picture per concept per trial; it collapses the two emotion
+# pictures shown together).
+trial_positions <- function(fp) {
+  fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+}
+
+compute_consistency <- function(fp) {
+  trial_positions(fp) %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dist_vec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(
+      consistency = if (length(dist_vec) < 2) NA_real_
+                    else cor(dist_vec[[1]], dist_vec[[2]], use = "complete.obs"),
+      n_trials = length(dist_vec), .groups = "drop")
+}
+
+# One averaged distance vector per participant x category.
+participant_dist_vecs <- function(fp) {
+  trial_positions(fp) %>%
+    group_by(participant_id, category, trial) %>%
+    nest() %>%
+    mutate(dvec = map(data, compute_dist_vec)) %>%
+    select(-data) %>%
+    group_by(participant_id, category) %>%
+    summarise(dvec = list(reduce(dvec, `+`) / length(dvec)), .groups = "drop")
+}
+```
+
+# Load
+
+```{r}
+#| label: load
+raw_free <- load_folder(FREE_DIR)
+
+cat("Raw rows:", nrow(raw_free),
+    "| participants:", n_distinct(raw_free$participant_id), "\n")
+
+placements_all <- raw_free %>%
+  filter(trial_type == "emotion-grid", !is.na(block), block != "null") %>%
+  split(seq_len(nrow(.))) %>%
+  map_dfr(~ extract_final_placements(.x, "posX", "posY", "placements")) %>%
+  mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+  filter(!is.na(trial), trial > 0) %>%
+  tag_categories()
+
+untagged <- placements_all %>% filter(is.na(category)) %>% distinct(base_name)
+if (nrow(untagged)) {
+  cat("\nImages with no category tag (check tag_categories):\n")
+  show_all(untagged)
+}
+placements_all <- placements_all %>% filter(!is.na(category))
+
+age_df <- read_csv(AGE_FILE, show_col_types = FALSE) %>%
+  select(participant_id, age) %>%
+  mutate(participant_id = as.character(participant_id)) %>%
+  filter(!is.na(age))
+
+cat("\nStructure check (expect 2 trials per participant x category):\n")
+placements_all %>%
+  group_by(participant_id, category, trial) %>%
+  summarise(n_concepts = n_distinct(base_name), n_images = n(),
+            sets = paste(sort(unique(set)), collapse = "+"), .groups = "drop") %>%
+  count(category, sets, n_concepts, n_images) %>%
+  show_all()
+```
+
+# Comprehension check
+
+Practice trial 2: five food images, two a priori groups. For each of four anchors we ask whether its nearest neighbour is acceptable. Croissant counts for all four, being genuinely ambiguous
+
+```{r}
+#| label: comprehension
+PRACTICE_TRIAL <- -2
+GROUP_MAP <- c(toast = "bread", bread = "bread", croissant = "bread",
+               chocolate = "sweet", candy = "sweet")
+ACCEPTABLE <- list(chocolate = c("croissant", "candy"),
+                   candy     = c("croissant", "chocolate"),
+                   bread     = c("toast", "croissant"),
+                   toast     = c("bread", "croissant"))
+N_CHECKS <- length(ACCEPTABLE)
+
+practice <- raw_free %>%
+  filter(trial_type == "emotion-grid") %>%
+  split(seq_len(nrow(.))) %>%
+  map_dfr(~ extract_final_placements(.x, "posX", "posY", "placements")) %>%
+  mutate(trial = suppressWarnings(as.numeric(trial))) %>%
+  filter(trial == PRACTICE_TRIAL) %>%
+  mutate(base_name = str_remove(str_remove(image_name, "\\.[A-Za-z0-9]+$"),
+                                "_\\d+$"),
+         group = unname(GROUP_MAP[base_name])) %>%
+  filter(!is.na(group))
+
+stopifnot(nrow(practice) > 0)
+
+long_dist <- practice %>%
+  group_by(participant_id) %>%
+  group_modify(~ {
+    d <- as.matrix(dist(cbind(.x$posX, .x$posY)))
+    dimnames(d) <- list(.x$base_name, .x$base_name)
+    as.data.frame(as.table(d)) %>%
+      transmute(from = as.character(Var1), to = as.character(Var2),
+                distance = Freq) %>%
+      filter(from != to)
+  }) %>%
+  ungroup()
+
+anchor_ranks <- long_dist %>%
+  filter(from %in% names(ACCEPTABLE)) %>%
+  group_by(participant_id, from) %>%
+  arrange(distance, .by_group = TRUE) %>%
+  summarise(nearest = first(to), n_tied = sum(distance == min(distance)),
+            .groups = "drop") %>%
+  rowwise() %>%
+  mutate(ok = nearest %in% ACCEPTABLE[[from]]) %>%
+  ungroup()
+
+if (any(anchor_ranks$n_tied > 1)) {
+  warning(sum(anchor_ranks$n_tied > 1),
+          " anchors had tied nearest neighbours; the first was used.")
+}
+
+comprehension <- anchor_ranks %>%
+  group_by(participant_id) %>%
+  summarise(n_ok = sum(ok), .groups = "drop")
+
+cat("\n--- how many of the", N_CHECKS, "checks each child passes ---\n")
+comprehension %>%
+  count(n_ok, name = "n_children") %>%
+  complete(n_ok = 0:N_CHECKS, fill = list(n_children = 0)) %>%
+  mutate(pct = round(100 * n_children / sum(n_children), 1)) %>%
+  print()
+
+cat("\n--- pass rate by age (if this climbs steeply, the filter is partly\n",
+    "    measuring the developmental effect you are studying) ---\n")
+comprehension %>%
+  inner_join(age_df, by = "participant_id") %>%
+  filter(age >= AGE_MIN, age < AGE_MAX) %>%
+  mutate(age_years = floor(age)) %>%
+  group_by(age_years) %>%
+  summarise(n = n(), mean_n_ok = round(mean(n_ok), 2),
+            pct_pass = round(100 * mean(n_ok >= MIN_CHECKS), 1),
+            .groups = "drop") %>%
+  print()
+```
+
+# Exclusions
+
+```{r}
+#| label: exclusions
+cons_all <- compute_consistency(placements_all)
+
+enrolled <- placements_all %>%
+  distinct(participant_id) %>%
+  left_join(age_df, by = "participant_id") %>%
+  left_join(comprehension, by = "participant_id") %>%
+  left_join(cons_all %>% group_by(participant_id) %>%
+              summarise(mean_rel = mean(consistency, na.rm = TRUE),
+                        .groups = "drop"),
+            by = "participant_id") %>%
+  mutate(
+    has_age    = !is.na(age),
+    in_age     = has_age & age >= AGE_MIN & age < AGE_MAX,
+    has_compr  = !is.na(n_ok),
+    pass_compr = !APPLY_COMPREHENSION | (has_compr & n_ok >= MIN_CHECKS),
+    pass_rel   = !APPLY_RELIABILITY_GATE |
+                 (!is.na(mean_rel) & mean_rel >= MIN_RELIABILITY),
+    reason = case_when(
+      !has_age              ~ "no age on file",
+      !in_age               ~ paste0("age outside [", AGE_MIN, ", ", AGE_MAX, ")"),
+      APPLY_COMPREHENSION & !has_compr ~ "no practice trial 2",
+      !pass_compr           ~ paste0("comprehension < ", MIN_CHECKS, "/", N_CHECKS),
+      !pass_rel             ~ "below reliability gate",
+      TRUE                  ~ "included"),
+    included = reason == "included")
+
+cat("\n==================== EXCLUSION AUDIT ====================\n")
+cat("APPLY_COMPREHENSION =", APPLY_COMPREHENSION,
+    "| MIN_CHECKS =", MIN_CHECKS,
+    "| age in [", AGE_MIN, ",", AGE_MAX, ")\n\n")
+enrolled %>% count(reason, name = "n") %>% arrange(desc(n)) %>% print()
+cat("\nINCLUDED:", sum(enrolled$included), "of", nrow(enrolled), "\n")
+
+cat("\nExcluded children, for the record:\n")
+enrolled %>% filter(!included) %>%
+  select(participant_id, age, n_ok, mean_rel, reason) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  arrange(reason, participant_id) %>% show_all()
+
+keep_ids <- enrolled %>% filter(included) %>% pull(participant_id)
+```
+
+```{r}
+#| label: analysis-sample
+# --- the two objects everything downstream uses ------------------------------
+fp <- placements_all %>% filter(participant_id %in% keep_ids)
+
+cons <- cons_all %>%
+  filter(participant_id %in% keep_ids) %>%
+  inner_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+stopifnot(setequal(unique(fp$participant_id), keep_ids),
+          all(cons$participant_id %in% keep_ids))
+cat("\nAnalysis sample locked:", n_distinct(fp$participant_id), "children\n")
+
+cat("\n--- age distribution of the analysis sample ---\n")
+enrolled %>% filter(included) %>%
+  mutate(age_years = floor(age)) %>%
+  count(age_years, name = "n") %>% print()
+enrolled %>% filter(included) %>%
+  summarise(n = n(), mean_age = round(mean(age), 2),
+            min = round(min(age), 1), max = round(max(age), 1)) %>%
+  print()
+```
+
+# Test-retest reliability
+
+```{r}
+#| label: reliability
+#| fig-width: 8
+#| fig-height: 4.5
+cat("\n--- reliability and the ceiling it implies, by domain ---\n")
+cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category) %>%
+  summarise(n = n(), mean_rtt = mean(consistency),
+            sd = sd(consistency), .groups = "drop") %>%
+  mutate(rel_trial_avg = sb2(mean_rtt), max_observable_r = sqrt(sb2(mean_rtt)),
+         across(where(is.numeric), ~ round(.x, 3))) %>%
+  print()
+
+cat("\n--- the same, by age. The CEILING RISES WITH AGE: that is the\n",
+    "    confound behind every age slope in this file ---\n")
+rel_by_age <- cons %>%
+  filter(!is.na(consistency)) %>%
+  mutate(age_bin = floor(age)) %>%
+  group_by(category, age_bin) %>%
+  summarise(rtt = mean(consistency), n = n(), .groups = "drop") %>%
+  mutate(rel_avg = sb2(rtt), att = sqrt(rel_avg))
+
+rel_by_age %>%
+  mutate(across(c(rtt, rel_avg, att), ~ round(.x, 3))) %>%
+  show_all()
+
+m_rel <- lmer(consistency ~ age + (1 | participant_id),
+              data = cons %>% filter(!is.na(consistency)))
+cat("\n--- reliability ~ age ---\n")
+print(round(summary(m_rel)$coefficients, 4))
+
+print(
+cons %>%
+  filter(!is.na(consistency), !is.na(age_group)) %>%
+  ggplot(aes(age_group, consistency, fill = category)) +
+  geom_boxplot(outlier.size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_fill_manual(values = PALETTE) +
+  labs(x = "Age (years)", y = "Test-retest consistency (r)", fill = NULL,
+       title = "Arrangement consistency by age") +
+  theme(legend.position = "bottom")
+)
+```
+
+# Cluster-based consistency
+
+```{r}
+#| label: cluster-ari
+cluster_trial <- function(df, k) {
+  coords <- df %>% arrange(base_name) %>% select(posX, posY) %>% as.matrix()
+  cutree(hclust(dist(coords), method = "ward.D2"), k = k)
+}
+
+cluster_consistency <- trial_positions(fp) %>%
+  group_by(participant_id, category, trial) %>%
+  nest() %>%
+  mutate(cl = map(data, ~ cluster_trial(.x, K_CLUSTER))) %>%
+  select(-data) %>%
+  group_by(participant_id, category) %>%
+  summarise(ari = if (length(cl) < 2) NA_real_
+                  else mclust::adjustedRandIndex(cl[[1]], cl[[2]]),
+            .groups = "drop") %>%
+  inner_join(age_df, by = "participant_id") %>%
+  add_age_group()
+
+cat("\n--- cluster consistency (ARI, k =", K_CLUSTER, ") ---\n")
+cluster_consistency %>%
+  group_by(age_group, category) %>%
+  summarise(n = sum(!is.na(ari)), mean_ari = round(mean(ari, na.rm = TRUE), 3),
+            sd = round(sd(ari, na.rm = TRUE), 3), .groups = "drop") %>%
+  show_all()
+```
+
+# Between-subject agreement
+
+```{r}
+#| label: between-subject
+#| fig-width: 7
+#| fig-height: 4.5
+pdv <- participant_dist_vecs(fp)
+
+between_subject <- pdv %>%
+  inner_join(age_df, by = "participant_id") %>%
+  add_age_group() %>%
+  group_by(category, age_group) %>%
+  summarise(
+    n = n(),
+    between_consistency = if (n() < 2) NA_real_ else
+      mean(combn(length(dvec), 2,
+                 function(ix) cor(dvec[[ix[1]]], dvec[[ix[2]]],
+                                  use = "complete.obs")), na.rm = TRUE),
+    .groups = "drop")
+
+cat("\n--- between-subject agreement ---\n")
+between_subject %>% mutate(between_consistency = round(between_consistency, 3)) %>%
+  show_all()
+
+print(
+between_subject %>%
+  filter(n >= MIN_BIN_N) %>%
+  ggplot(aes(age_group, between_consistency, fill = category)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  scale_fill_manual(values = PALETTE) +
+  labs(x = "Age (years)", y = "Mean pairwise r between children", fill = NULL,
+       title = "Between-subject agreement by age") +
+  theme(legend.position = "bottom")
+)
+```
+
+# Group dendrograms
+
+```{r}
+#| label: dendrograms
+#| fig-width: 14
+#| fig-height: 10
+long_to_dist <- function(d) {
+  items <- sort(unique(c(d$item1, d$item2)))
+  m <- matrix(0, length(items), length(items), dimnames = list(items, items))
+  m[cbind(match(d$item1, items), match(d$item2, items))] <- d$avg_dist
+  m[cbind(match(d$item2, items), match(d$item1, items))] <- d$avg_dist
+  as.dist(m)
+}
+
+avg_dist_long <- trial_positions(fp) %>%
+  group_by(participant_id, category, trial) %>%
+  group_modify(function(d, key) {
+    d <- d %>% arrange(base_name)
+    m <- as.matrix(dist(as.matrix(d[, c("posX", "posY")])))
+    dimnames(m) <- list(d$base_name, d$base_name)
+    as.data.frame(as.table(m)) %>%
+      transmute(item1 = as.character(Var1), item2 = as.character(Var2),
+                dist = Freq) %>%
+      filter(item1 < item2)
+  }) %>%
+  ungroup() %>%
+  group_by(participant_id, category, item1, item2) %>%
+  summarise(dist = mean(dist), .groups = "drop") %>%
+  group_by(participant_id, category) %>%
+  mutate(dist = dist / mean(dist, na.rm = TRUE)) %>%   # normalise canvas use
+  ungroup() %>%
+  inner_join(age_df, by = "participant_id") %>%
+  add_age_group() %>%
+  group_by(category, age_group, item1, item2) %>%
+  summarise(avg_dist = mean(dist), .groups = "drop")
+
+clusters <- avg_dist_long %>%
+  group_by(category, age_group) %>%
+  nest() %>%
+  mutate(dist_obj = map(data, long_to_dist),
+         cluster  = map(dist_obj, ~ hclust(.x, method = "ward.D2")),
+         dend     = map(cluster, as.dendrogram)) %>%
+  ungroup() %>%
+  arrange(category, age_group)
+
+op <- par(mfrow = c(3, 5), mar = c(2, 2, 3, 6))
+pwalk(list(clusters$cluster, clusters$category, clusters$age_group),
+      function(cl, cat_, ag) {
+        as.dendrogram(cl) %>%
+          set("branches_lwd", 2) %>%
+          set("branches_k_color",
+              value = c("#5102A3", "#B43359", "#F1731D", "#F6D442"), k = 4) %>%
+          plot(horiz = TRUE, main = paste0(cat_, ", age ", ag))
+      })
+par(op)
+
+cat("\n--- cophenetic correlation between age groups ---\n")
+for (cat_ in sort(unique(clusters$category))) {
+  sub <- clusters %>% filter(category == cat_) %>% arrange(age_group)
+  if (nrow(sub) < 2) next
+  dl <- do.call(dendlist, setNames(sub$dend, as.character(sub$age_group)))
+  m <- tryCatch(cor.dendlist(dl), error = function(e) NULL)
+  if (is.null(m)) { cat(cat_, ": skipped\n"); next }
+  print(ggcorrplot(m, type = "lower", lab = TRUE, outline.color = "black",
+                   ggtheme = ggplot2::theme_void()) + ggtitle(cat_))
+}
+```
+
+# Save, and hand off to the model comparison
+
+```{r}
+#| label: save
+write_csv(enrolled, "exclusion_audit.csv")
+write_csv(cons,     "consistency_included.csv")
+
+# Manifest of exactly which image files the children saw. Built from the data
+# rather than by listing the stimulus folder, which guarantees two things the
+# model pipeline depends on: the folder may hold images no child ever saw, and
+# the concept strings must be byte-identical to the base_name values R sorts
+# on. Taken from placements_all, not fp, because the stimulus set does not
+# depend on which children are included.
+placements_all %>%
+  distinct(category, base_name, set, image_name) %>%
+  arrange(category, base_name, set) %>%
+  write_csv("concept_inventory.csv")
+
+saveRDS(list(
+  fp     = fp,
+  cons   = cons,
+  age_df = age_df,
+  config = list(APPLY_COMPREHENSION    = APPLY_COMPREHENSION,
+                MIN_CHECKS             = MIN_CHECKS,
+                APPLY_RELIABILITY_GATE = APPLY_RELIABILITY_GATE,
+                AGE_MIN = AGE_MIN, AGE_MAX = AGE_MAX,
+                n_children = n_distinct(fp$participant_id),
+                built = Sys.time())
+), "analysis_sample.rds")
+
+cat("\nChildren analysed:", n_distinct(fp$participant_id),
+    "| comprehension filter:", APPLY_COMPREHENSION,
+    "| ages", AGE_MIN, "to", AGE_MAX - 1, "\n")
+cat("Wrote analysis_sample.rds -- run kidsnet_model_comparison.qmd next.\n")
+```

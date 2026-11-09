@@ -1,0 +1,364 @@
+---
+title: "KidsNet Study 1 — Comparison with reference models"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+Exploratory. Three reference models stand for different accounts of what
+drives children's arrangements: appearance without language (DINOv2),
+appearance shaped by language (CLIP), and conceptual structure with no image
+input (SPoSE).
+
+The claim this part supports best is the within-child ranking — which
+reference fits a given child better. Both correlations carry the same
+attenuation, so it cancels exactly and no correction is needed. Correlations
+compared *across* ages carry the same confound as Part 2 and are treated with
+the same caution.
+
+```{r}
+#| label: setup
+# Configuration and shared functions. setup.R is the single source of truth
+# for every constant and helper used below.
+source(here::here("setup.R"))
+library(lme4); library(lmerTest); library(emmeans); library(broom)
+theme_set(theme_minimal(base_size = 12))
+
+S <- readRDS("analysis_sample.rds")
+fp <- S$children; cons <- S$consistency
+str(S$config, max.level = 1)
+```
+
+# Load and verify the model RDMs
+
+```{r}
+#| label: load-rdms
+rdms_raw <- read_csv(RDM_FILE, show_col_types = FALSE)
+rdms_raw %>% count(domain, model, picture_set) %>% show_all()
+
+# A child's vector averages trial 1 and trial 2, which used different
+# photographs of the same concepts, so the model RDMs are averaged over
+# picture sets too. SPoSE has no picture set: it is built from concepts.
+model_rdms <- rdms_raw %>%
+  mutate(picture_set = as.character(picture_set)) %>%
+  group_by(domain, model, pair_index, concept_a, concept_b) %>%
+  summarise(distance = if (any(picture_set == "avg")) {
+              distance[picture_set == "avg"][1]
+            } else {
+              mean(distance)
+            },
+            n_sets = n(), .groups = "drop") %>%
+  pivot_wider(id_cols = c(domain, pair_index, concept_a, concept_b),
+              names_from = model, values_from = distance) %>%
+  arrange(domain, pair_index)
+
+for (nm in c("perceptual", "hybrid", "conceptual")) {
+  if (!nm %in% names(model_rdms)) model_rdms[[nm]] <- NA_real_
+}
+
+verify_pair_order(model_rdms)
+
+model_rdms %>%
+  group_by(domain) %>%
+  summarise(pairs = n(),
+            has_perceptual = sum(!is.na(perceptual)),
+            has_hybrid = sum(!is.na(hybrid)),
+            has_conceptual = sum(!is.na(conceptual)),
+            .groups = "drop") %>%
+  show_all()
+```
+
+```{r}
+#| label: concept-check
+concept_check <- fp %>%
+  distinct(category, base_name) %>%
+  group_by(category) %>%
+  summarise(child = list(sort(base_name)), .groups = "drop") %>%
+  full_join(model_rdms %>%
+              group_by(category = domain) %>%
+              summarise(model = list(sort(unique(c(concept_a, concept_b)))),
+                        .groups = "drop"),
+            by = "category") %>%
+  rowwise() %>%
+  mutate(same = identical(child, model),
+         only_child = paste(setdiff(child, model), collapse = ", "),
+         only_model = paste(setdiff(model, child), collapse = ", ")) %>%
+  ungroup()
+
+concept_check %>% select(-child, -model) %>% show_all()
+
+usable <- concept_check %>% filter(same, category %in% DOMAINS) %>%
+  pull(category)
+cat("Domains usable for the model comparison:",
+    paste(usable, collapse = ", "), "\n")
+
+# Emotion words are not THINGS object concepts, so emotions has no
+# conceptual reference and appears only in the vision-model results.
+cat("Domains with a conceptual reference:",
+    paste(intersect(usable, CONCEPTUAL_DOMAINS), collapse = ", "), "\n")
+```
+
+# How much the references overlap
+
+Two references that agree with each other cannot be told apart by any
+amount of child data. This bounds every comparison below.
+
+```{r}
+#| label: overlap
+model_rdms %>%
+  filter(domain %in% usable) %>%
+  group_by(domain) %>%
+  summarise(n_pairs = n(),
+            perc_hybr = round(safe_cor(perceptual, hybrid, "spearman"), 2),
+            perc_conc = round(safe_cor(perceptual, conceptual, "spearman"), 2),
+            conc_hybr = round(safe_cor(conceptual, hybrid, "spearman"), 2),
+            .groups = "drop") %>%
+  show_all()
+```
+
+# Per-child fit to each reference
+
+```{r}
+#| label: fits
+refs_long <- model_rdms %>%
+  filter(domain %in% usable) %>%
+  arrange(domain, pair_index) %>%
+  pivot_longer(c(perceptual, hybrid, conceptual),
+               names_to = "model", values_to = "distance") %>%
+  filter(!is.na(distance)) %>%
+  group_by(domain, model) %>%
+  summarise(ref = list(distance), .groups = "drop")
+
+pdv <- participant_dist_vecs(fp) %>% filter(category %in% usable)
+
+fits <- pdv %>%
+  inner_join(refs_long, by = c("category" = "domain"),
+             relationship = "many-to-many") %>%
+  mutate(r = map2_dbl(dvec, ref, ~ cor(.x, .y, method = "spearman"))) %>%
+  select(participant_id, category, model, n_trials, r) %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  left_join(cons %>% select(participant_id, category,
+                            reliability = consistency),
+            by = c("participant_id", "category"))
+
+fits %>%
+  group_by(category, model) %>%
+  summarise(n = n(), mean_r = round(mean(r), 3), sd = round(sd(r), 3),
+            .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, model) %>% show_all()
+```
+
+```{r}
+#| label: permutation
+# Does a fit beat chance at all? Shuffle concept labels, which preserves the
+# child's spatial arrangement and the reference's structure but destroys the
+# correspondence between them.
+set.seed(42)
+
+perm_p <- function(dvec, ref, concepts, n_perm = N_PERM) {
+  obs <- cor(dvec, ref, method = "spearman")
+  n <- length(concepts)
+  null <- replicate(n_perm, {
+    o <- sample(n)
+    m <- matrix(0, n, n)
+    m[lower.tri(m)] <- dvec
+    m <- m + t(m)
+    mp <- m[o, o]
+    cor(mp[lower.tri(mp)], ref, method = "spearman")
+  })
+  mean(null >= obs)
+}
+
+perm_tbl <- pdv %>%
+  inner_join(refs_long, by = c("category" = "domain"),
+             relationship = "many-to-many") %>%
+  mutate(p = pmap_dbl(list(dvec, ref, concepts), perm_p)) %>%
+  select(participant_id, category, model, p)
+
+perm_tbl %>%
+  group_by(category, model) %>%
+  summarise(n = n(), pct_above_chance = round(100 * mean(p < .05), 1),
+            .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, model) %>% show_all()
+```
+
+# Within-child ranking
+
+The strongest comparison available here. For each child, is the conceptual
+reference a better fit than the perceptual one? Both correlations carry the
+same reliability factor, so the comparison is attenuation-free.
+
+```{r}
+#| label: ordering
+wide <- fits %>%
+  select(participant_id, category, age, age_bin, age_group, model, r) %>%
+  pivot_wider(names_from = model, values_from = r) %>%
+  filter(!is.na(perceptual))
+
+ordering <- wide %>%
+  filter(!is.na(conceptual)) %>%
+  mutate(difference = conceptual - perceptual,
+         conc_wins = conceptual > perceptual)
+
+ordering %>%
+  group_by(category) %>%
+  summarise(n = n(),
+            pct_conceptual_wins = round(100 * mean(conc_wins), 1),
+            mean_difference = round(mean(difference), 3),
+            .groups = "drop") %>%
+  show_all()
+
+ordering %>%
+  group_by(category) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  nest() %>%
+  mutate(binom = map(data, ~ {
+            b <- binom.test(sum(.x$conc_wins), nrow(.x))
+            tibble(k = sum(.x$conc_wins), n = nrow(.x),
+                   p_binom = signif(b$p.value, 3))
+          }),
+         wilcox = map_dbl(data,
+                          ~ signif(wilcox.test(.x$difference)$p.value, 3))) %>%
+  select(-data) %>% unnest(binom) %>% show_all()
+```
+
+```{r}
+#| label: ordering-model
+# One model over all domains with a conceptual reference, child as a random
+# effect so a child contributing several domains is not counted as several
+# independent observations.
+if (n_distinct(ordering$category) > 1) {
+  m_ord <- lmer(difference ~ category + (1 | participant_id), data = ordering)
+  print(emmeans(m_ord, ~ category))
+} else {
+  m_ord <- lm(difference ~ 1, data = ordering)
+  tidy(m_ord) %>% mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+    show_all()
+}
+```
+
+```{r}
+#| label: ordering-age
+# Does the winning reference change with age? The cancellation holds within
+# an age band, so a shift in the ranking across bands is interpretable even
+# though the raw fits are not comparable across ages.
+ordering %>%
+  group_by(category, age_bin) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  summarise(n = n(), pct_conceptual_wins = round(100 * mean(conc_wins), 1),
+            mean_difference = round(mean(difference), 3),
+            .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, age_bin) %>% show_all()
+
+ordering %>%
+  group_by(category) %>%
+  filter(n_distinct(age_bin) >= 3) %>%
+  nest() %>%
+  mutate(t = map(data, ~ tidy(lm(difference ~ age, data = .x)))) %>%
+  select(-data) %>% unnest(t) %>% filter(term == "age") %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: fig-ordering
+#| fig-width: 7
+#| fig-height: 4
+ordering %>%
+  mutate(category = fct_domain(category)) %>%
+  ggplot(aes(age, difference, colour = category)) +
+  geom_hline(yintercept = 0, linetype = 2, colour = "grey50") +
+  geom_point(alpha = .45, size = 1.2) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = .7) +
+  scale_colour_manual(values = PALETTE) +
+  labs(x = "age (years)", y = "conceptual minus perceptual fit",
+       title = "Which reference fits each child better",
+       subtitle = "Above zero: the conceptual reference fits better")
+```
+
+# Variance shares
+
+Commonality analysis between the perceptual and conceptual references.
+Reported as the weakest result here: simulation showed the unique-variance
+share is only partly free of attenuation, so it is not a safe basis for a
+developmental claim.
+
+```{r}
+#| label: commonality
+commonality <- function(rp, rk, rpk) {
+  if (!all(is.finite(c(rp, rk, rpk))) || abs(rpk) >= 1) return(NULL)
+  r2_full <- (rp^2 + rk^2 - 2 * rp * rk * rpk) / (1 - rpk^2)
+  tibble(r2_full = r2_full,
+         unique_p = r2_full - rk^2,
+         unique_k = r2_full - rp^2,
+         shared = r2_full - (r2_full - rk^2) - (r2_full - rp^2))
+}
+
+ref_overlap <- model_rdms %>%
+  filter(domain %in% usable) %>%
+  group_by(domain) %>%
+  summarise(rpk = safe_cor(perceptual, conceptual, "spearman"),
+            .groups = "drop")
+
+group_mean <- pdv %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  group_by(category, age_bin) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  summarise(n = n(), mean_vec = list(reduce(dvec, `+`) / length(dvec)),
+            .groups = "drop")
+
+shares <- group_mean %>%
+  inner_join(model_rdms %>%
+               filter(domain %in% usable) %>%
+               arrange(domain, pair_index) %>%
+               group_by(domain) %>%
+               summarise(perc = list(perceptual),
+                         conc = list(conceptual), .groups = "drop"),
+             by = c("category" = "domain")) %>%
+  inner_join(ref_overlap, by = c("category" = "domain")) %>%
+  mutate(rp = map2_dbl(mean_vec, perc, ~ safe_cor(.x, .y, "spearman")),
+         rk = map2_dbl(mean_vec, conc, ~ safe_cor(.x, .y, "spearman")),
+         parts = pmap(list(rp, rk, rpk), commonality)) %>%
+  filter(map_lgl(parts, ~ !is.null(.x))) %>%
+  unnest(parts) %>%
+  mutate(conceptual_share = unique_k / (unique_p + unique_k),
+         across(c(rp, rk, rpk, r2_full, unique_p, unique_k, shared,
+                  conceptual_share), ~ round(.x, 3)))
+
+shares %>%
+  select(category, age_bin, n, rp, rk, rpk, r2_full,
+         unique_p, unique_k, conceptual_share) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+```{r}
+#| label: fig-shares
+#| fig-width: 7
+#| fig-height: 4
+if (nrow(shares)) {
+  shares %>%
+    mutate(category = fct_domain(category)) %>%
+    ggplot(aes(age_bin, conceptual_share, colour = category)) +
+    geom_point(aes(size = n)) + geom_line(linewidth = .7) +
+    geom_hline(yintercept = .5, linetype = 2, colour = "grey50") +
+    scale_colour_manual(values = PALETTE) +
+    scale_size_continuous(range = c(1.5, 4)) +
+    ylim(0, 1) +
+    labs(x = "age band", y = "conceptual share of unique variance",
+         title = "Conceptual versus perceptual unique variance",
+         subtitle = "Exploratory: only partly free of attenuation")
+}
+```

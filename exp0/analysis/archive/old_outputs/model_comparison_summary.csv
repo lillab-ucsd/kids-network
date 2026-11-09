@@ -1,0 +1,13 @@
+comparison,domain,model,value,verdict,sound
+1. above chance (permutation),animals,perceptual,0.103,yes,yes — model vs its own scrambled self
+1. above chance (permutation),animals,hybrid,0.157,yes,yes — model vs its own scrambled self
+1. above chance (permutation),animals,conceptual,0.206,yes,yes — model vs its own scrambled self
+1. above chance (permutation),emotions,perceptual,0.112,no,yes — model vs its own scrambled self
+1. above chance (permutation),emotions,hybrid,0.149,yes,yes — model vs its own scrambled self
+1. above chance (permutation),plants,perceptual,0.131,yes,yes — model vs its own scrambled self
+1. above chance (permutation),plants,hybrid,0.206,yes,yes — model vs its own scrambled self
+1. above chance (permutation),plants,conceptual,0.275,yes,yes — model vs its own scrambled self
+2. conceptual beats perceptual (within child),animals,SPoSE vs DINOv2,0.779,yes,yes — attenuation cancels within child
+2. conceptual beats perceptual (within child),plants,SPoSE vs DINOv2,0.726,yes,yes — attenuation cancels within child
+3. balance shifts with age,animals,group-level share,0.199,maybe,"weak — compare against sim_bias, not zero"
+3. balance shifts with age,plants,group-level share,0.002,no,"weak — compare against sim_bias, not zero"

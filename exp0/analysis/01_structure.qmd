@@ -1,0 +1,314 @@
+---
+title: "KidsNet Study 1 — Structure in children's arrangements"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+Descriptive structure, with no reference to adults or models. Every measure here is computed from the child's own data alone, so none of it depends on the cross-trial estimator and four-year-olds are included throughout.
+
+```{r}
+#| label: setup
+# Configuration and shared functions. setup.R is the single source of truth
+# for every constant and helper used below.
+source(here::here("setup.R"))
+library(mclust); library(dendextend)
+library(lmerTest); library(broom); library(broom.mixed)
+theme_set(theme_minimal(base_size = 12))
+
+S <- readRDS("analysis_sample.rds")
+fp <- S$children; cons <- S$consistency
+str(S$config, max.level = 1)
+
+# Every measure below derives from this one object.
+tdv <- trial_dist_vecs(fp)
+```
+
+# Sample
+
+```{r}
+#| label: sample
+fp %>% distinct(participant_id, category) %>%
+  count(category, name = "children") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category) %>% show_all()
+
+cons %>% distinct(participant_id, age) %>%
+  mutate(age_years = floor(age)) %>%
+  count(age_years, name = "children") %>% show_all()
+```
+
+# Consistency
+
+Trial-to-trial Spearman correlation per child-domain. This is both the first developmental outcome and the ceiling every reference-based correlation in Part 2 is read against.
+
+```{r}
+#| label: reliability
+rel_tbl <- cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), mean_r = round(mean(consistency), 3),
+            sd = round(sd(consistency), 3),
+            .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  mutate(category = fct_domain(category))
+
+rel_tbl %>% arrange(category, age_bin) %>% show_all()
+
+cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category) %>%
+  summarise(n = n(), mean_r = round(mean(consistency), 3),
+            # One-sided: the question is whether arrangements are repeatable
+            # at all, not whether they are anti-correlated.
+            t = round(t.test(consistency, mu = 0)$statistic, 2),
+            p = signif(t.test(consistency, mu = 0)$p.value, 3),
+            .groups = "drop") %>%
+  show_all()
+```
+
+```{r}
+#| label: reliability-age
+# Random intercepts for child and domain: a child contributes up to three
+# domains and the domains differ in how repeatable they are.
+m_rel <- lmer(consistency ~ age_c + (1 | participant_id) + (1 | category),
+              data = filter(cons, !is.na(consistency)))
+tidy(m_rel, effects = "fixed") %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: fig-reliability
+#| fig-width: 7
+#| fig-height: 4
+cons %>%
+  filter(!is.na(consistency), !is.na(age_group)) %>%
+  mutate(category = fct_domain(category)) %>%
+  ggplot(aes(age_group, consistency, fill = category)) +
+  geom_boxplot(outlier.size = .6, alpha = 1) +
+  scale_fill_manual(values = PALETTE) +
+  labs(x = "age (years)", y = "trial-to-trial correlation",
+       title = "Arrangement consistency by age")
+```
+
+## The ceiling this implies
+
+```{r}
+#| label: ceiling
+# The highest correlation a child's trial-averaged arrangement can show with
+# any perfect reference is the square root of its Spearman-Brown reliability.
+cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), mean_r = mean(consistency), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  mutate(sb_2trial = round(sb(mean_r, 2), 3),
+         ceiling = round(sqrt(sb(mean_r, 2)), 3),
+         mean_r = round(mean_r, 3),
+         category = fct_domain(category)) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+# Cluster agreement across trials
+
+Each trial's distance vector is cut into `K_CLUSTER` clusters and the two trials' partitions are compared. This asks whether a child imposes the same grouping twice, without reference to what the grouping should be.
+
+```{r}
+#| label: cluster-ari
+cluster_ari <- tdv %>%
+  mutate(cl = map2(dvec, concepts,
+                   ~ cutree(hclust(as_dist_vec(.x, .y), method = LINKAGE),
+                            k = K_CLUSTER))) %>%
+  group_by(participant_id, category) %>%
+  summarise(ari = if (n() < 2) NA_real_ else
+              mean(combn(length(cl), 2, function(ix)
+                mclust::adjustedRandIndex(cl[[ix[1]]], cl[[ix[2]]]))),
+            .groups = "drop") %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins()
+
+cluster_ari %>%
+  group_by(category, age_bin) %>%
+  summarise(n = sum(!is.na(ari)), mean_ari = round(mean(ari, na.rm = TRUE), 3),
+            .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, age_bin) %>% show_all()
+
+cluster_ari %>%
+  filter(!is.na(ari)) %>%
+  group_by(category) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  nest() %>%
+  mutate(t = map(data, ~ tidy(lm(ari ~ age, data = .x)))) %>%
+  select(-data) %>% unnest(t) %>% filter(term == "age") %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+  arrange(category) %>% show_all()
+```
+
+# Exemplar generalisation
+
+Only emotions has two photographs of each concept in a trial, so the within-concept distance exists there and nowhere else. It measures whether a child treats two different faces showing one emotion as belonging together. Scaled by the trial's mean distance, so children who used more or less of the arena are comparable.
+
+```{r}
+#| label: exemplar-generalisation
+within_tbl <- trial_within_dists(fp) %>%
+  left_join(tdv %>% mutate(mean_d = map_dbl(dvec, mean)) %>%
+              select(participant_id, category, trial, mean_d),
+            by = c("participant_id", "category", "trial")) %>%
+  mutate(rel_within = within_dist / mean_d)
+
+if (nrow(within_tbl)) {
+  by_child <- within_tbl %>%
+    group_by(participant_id, category) %>%
+    summarise(rel_within = mean(rel_within, na.rm = TRUE), .groups = "drop") %>%
+    inner_join(S$age, by = "participant_id") %>%
+    add_age_bins()
+
+  by_child %>%
+    group_by(category, age_bin) %>%
+    summarise(n = n(), mean_rel = round(mean(rel_within, na.rm = TRUE), 3),
+              .groups = "drop") %>%
+    filter(n >= MIN_BIN_N) %>%
+    arrange(category, age_bin) %>% show_all()
+
+  by_child %>%
+    group_by(category) %>%
+    filter(n() >= MIN_BIN_N) %>%
+    nest() %>%
+    mutate(t = map(data, ~ tidy(lm(rel_within ~ age, data = .x)))) %>%
+    select(-data) %>% unnest(t) %>% filter(term == "age") %>%
+    mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+
+  within_tbl %>%
+    group_by(category, base_name) %>%
+    summarise(n = n(), mean_rel = round(mean(rel_within, na.rm = TRUE), 3),
+              .groups = "drop") %>%
+    arrange(mean_rel) %>% show_all()
+} else {
+  cat("No domain has repeated exemplars within a trial.\n")
+}
+```
+
+# Between-child agreement
+
+Each child's averaged vector against the mean of the *other* children in the same age band, leave-one-out so no child is in its own reference. This rises if children converge on a shared structure. It is attenuated by reliability like any other correlation, so it is read descriptively and never used for an age slope.
+
+```{r}
+#| label: between-child
+pdv <- participant_dist_vecs(fp)
+
+between_child <- pdv %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  group_by(category, age_group) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  mutate(agreement = {
+    k <- n(); tot <- reduce(dvec, `+`)
+    map_dbl(seq_len(k), ~ cor(dvec[[.x]], (tot - dvec[[.x]]) / (k - 1),
+                              method = "spearman"))
+  }) %>%
+  ungroup()
+
+between_child %>%
+  group_by(category, age_group) %>%
+  summarise(n = n(), mean_agreement = round(mean(agreement), 3),
+            .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, age_group) %>% show_all()
+```
+
+```{r}
+#| label: fig-between-child
+#| fig-width: 7
+#| fig-height: 4
+between_child %>%
+  mutate(category = fct_domain(category)) %>%
+  ggplot(aes(age_group, agreement, fill = category)) +
+  geom_boxplot(outlier.size = .6, alpha = .85) +
+  scale_fill_manual(values = PALETTE) +
+  labs(x = "age (years)", y = "correlation with other children in band",
+       title = "Between-child agreement by age",
+       subtitle = "Attenuated by reliability; read descriptively")
+```
+
+# Group dendrograms
+
+One tree per domain per age band, from the mean distance vector of the children in that cell. Average linkage throughout, so the trees are comparable to each other.
+
+```{r}
+#| label: dendrograms
+clusters <- pdv %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  group_by(category, age_group) %>%
+  filter(n() >= MIN_BIN_N) %>%
+  summarise(n = n(),
+            mean_vec = list(reduce(dvec, `+`) / length(dvec)),
+            concepts = list(first(concepts)), .groups = "drop") %>%
+  mutate(dend = map2(mean_vec, concepts,
+                     ~ as.dendrogram(hclust(as_dist_vec(.x, .y),
+                                            method = LINKAGE))),
+         category = fct_domain(category)) %>%
+  arrange(category, age_group)
+
+clusters %>% select(category, age_group, n) %>% show_all()
+```
+
+```{r}
+#| label: fig-dendrograms
+#| fig-width: 10
+#| fig-height: 4
+for (dom in levels(clusters$category)) {
+  sub <- filter(clusters, category == dom)
+  if (!nrow(sub)) next
+  op <- par(mfrow = c(1, nrow(sub)), mar = c(7, 2, 3, 1))
+  pwalk(list(sub$dend, sub$age_group, sub$n), function(d, a, n) {
+    d <- d %>% dendextend::set("branches_lwd", 2) %>%
+      dendextend::set("labels_cex", 0.8)
+    plot(d, main = paste0(dom, ", age ", a, " (n=", n, ")"))
+  })
+  par(op)
+}
+```
+
+```{r}
+#| label: cophenetic
+# How much the tree changes between neighbouring age bands, as a number
+# rather than by eye.
+clusters %>%
+  group_by(category) %>%
+  filter(n() >= 2) %>%
+  summarise(pairs = list({
+    a <- age_group; d <- dend
+    combn(length(d), 2, simplify = FALSE) %>%
+      map_dfr(~ tibble(
+        band_a = as.character(a[.x[1]]), band_b = as.character(a[.x[2]]),
+        cophenetic = round(cor_cophenetic(d[[.x[1]]], d[[.x[2]]]), 3)))
+  }), .groups = "drop") %>%
+  unnest(pairs) %>% show_all()
+```
+
+# Summary
+
+```{r}
+#| label: summary
+list(
+  consistency = rel_tbl %>% select(category, age_bin, n, mean_r),
+  cluster_ari = cluster_ari %>% group_by(category, age_bin) %>%
+    summarise(n = sum(!is.na(ari)),
+              mean_ari = round(mean(ari, na.rm = TRUE), 3),
+              .groups = "drop") %>% filter(n >= MIN_BIN_N)
+) %>% iwalk(function(tb, nm) {
+  cat("\n---", nm, "---\n"); show_all(tb)
+})
+```

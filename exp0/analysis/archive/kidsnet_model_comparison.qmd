@@ -1,0 +1,604 @@
+---
+title: "KidsNet — Model Comparison"
+subtitle: "Children's arrangements against three reference structures"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+# What this file does
+
+**Read this before interpreting anything:** two of the three comparisons below are sound and one is confounded. Steps 5 and 4 are the claims this pilot supports. Step 7 explains why the obvious age analysis does not work, and Steps 8–9 are what to report instead.
+
+# Setup
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(conflicted)
+conflicts_prefer(dplyr::filter, dplyr::select, dplyr::mutate, dplyr::summarise,
+                 dplyr::count, dplyr::arrange, dplyr::rename, dplyr::lag,
+                 purrr::map, lmerTest::lmer, .quiet = TRUE)
+
+RDM_FILE  <- "model_rdms_long.csv"
+SAMPLE    <- "analysis_sample.rds"
+
+AGE_MIN   <- 4
+AGE_MAX   <- 9      # exclusive
+MIN_BIN_N <- 5      # age bands smaller than this are dropped from figures
+N_PERM    <- 1000
+N_BOOT    <- 1000   # raise to 5000 for final numbers
+
+# "avg" = the per-trial model RDMs averaged, matching what
+# participant_dist_vecs() does to the child data.
+SET_CHOICE <- c(animals = "avg", plants = "avg", emotions = "avg")
+MODEL_COLS <- c(perceptual = "#0F728B", conceptual = "#F1731D",
+                hybrid = "#8E7CC3")
+
+set.seed(42)
+theme_set(theme_minimal(base_size = 12))
+
+# Print every row of a table. Deliberately NOT a bare print() with an n
+# argument: on a plain data.frame, `n` partial-matches `na.print` inside
+# print.default and throws "invalid 'na.print' specification".
+show_all <- function(x, n = Inf) print(tibble::as_tibble(x), n = n)
+
+# cor() errors rather than returning NA when a vector is entirely missing,
+# which happens for every conceptual column in emotions.
+safe_cor <- function(x, y, method = "pearson", min_n = 3) {
+  ok <- is.finite(x) & is.finite(y)
+  if (sum(ok) < min_n) return(NA_real_)
+  if (sd(x[ok]) == 0 || sd(y[ok]) == 0) return(NA_real_)
+  cor(x[ok], y[ok], method = method)
+}
+
+# Spearman-Brown: averaging 2 trials lifts reliability above the single-trial
+# test-retest r. The ceiling on any model correlation is sqrt of THIS.
+sb2 <- function(r) 2 * pmax(r, 0) / (1 + pmax(r, 0))
+```
+
+# The analysis sample
+
+Exclusions live in `kidsnet_analysis.qmd` and nowhere else. This file reads the already-filtered sample, so there is no way for the two files to disagree about who is in.
+
+```{r}
+#| label: load-sample
+if (!file.exists(SAMPLE)) {
+  stop("`", SAMPLE, "` not found. Run kidsnet_analysis.qmd first -- its final ",
+       "chunk writes it.")
+}
+S <- readRDS(SAMPLE)
+
+fp     <- S$fp        # filtered placements
+cons   <- S$cons      # test-retest consistency, with age
+age_df <- S$age_df
+
+cat("Children:", n_distinct(fp$participant_id),
+    "| domains:", paste(sort(unique(fp$category)), collapse = ", "), "\n")
+cat("Filters recorded in the sample:\n"); str(S$config)
+
+# Concepts in sort(base_name) order. The model RDMs built in Python use the
+# same ordering; Step 1 verifies it rather than trusting it.
+compute_dist_vec <- function(df) {
+  coords <- df %>% arrange(base_name) %>% select(posX, posY) %>% as.matrix()
+  as.vector(dist(coords))
+}
+
+trial_positions <- function(fp) {
+  fp %>%
+    group_by(participant_id, category, trial, base_name) %>%
+    summarise(posX = mean(posX), posY = mean(posY), .groups = "drop")
+}
+
+# One averaged distance vector per participant x category.
+pdv <- trial_positions(fp) %>%
+  group_by(participant_id, category, trial) %>%
+  nest() %>%
+  mutate(dvec = map(data, compute_dist_vec)) %>%
+  select(-data) %>%
+  group_by(participant_id, category) %>%
+  summarise(dvec = list(reduce(dvec, `+`) / length(dvec)), .groups = "drop")
+
+# Reliability per age band, and the ceiling it implies. Needed in Step 9.
+rel_by_age <- cons %>%
+  filter(!is.na(consistency)) %>%
+  mutate(age_bin = floor(age)) %>%
+  group_by(category, age_bin) %>%
+  summarise(rtt = mean(consistency), n = n(), .groups = "drop") %>%
+  mutate(rel_avg = sb2(rtt), att = sqrt(rel_avg))
+
+cat("\n--- reliability ceiling by age (the confound behind Step 7) ---\n")
+rel_by_age %>% mutate(across(c(rtt, rel_avg, att), ~ round(.x, 3))) %>% show_all()
+```
+
+# Step 1 — Load the model RDMs and verify alignment
+
+Element *k* of a child's distance vector and row `pair_index == k` of the model RDM must be the same pair of concepts. R's `dist()` stores the lower triangle column-major; the Python builder reproduces that. A mismatch here would make every correlation in this file quietly wrong with no symptom, so it is checked twice: pair order, then the concept lists themselves.
+
+```{r}
+#| label: model-rdms
+rdms_raw <- read_csv(RDM_FILE, show_col_types = FALSE)
+
+model_rdms <- rdms_raw %>%
+  filter(model == "conceptual" | picture_set == SET_CHOICE[domain]) %>%
+  pivot_wider(id_cols = c(domain, pair_index, concept_a, concept_b),
+              names_from = model, values_from = distance) %>%
+  arrange(domain, pair_index)
+
+if (!"conceptual" %in% names(model_rdms)) model_rdms$conceptual <- NA_real_
+
+# Element k of a child's dvec and row pair_index == k must be the SAME pair.
+# R's dist() stores the lower triangle column-major. A mismatch here would make
+# every correlation below quietly wrong, with no symptom.
+for (dom in unique(model_rdms$domain)) {
+  d <- model_rdms %>% filter(domain == dom) %>% arrange(pair_index)
+  concepts <- sort(unique(c(d$concept_a, d$concept_b)))
+  n <- length(concepts)
+  stopifnot(nrow(d) == n * (n - 1) / 2)
+  lt <- which(lower.tri(matrix(0, n, n)), arr.ind = TRUE)
+  stopifnot(identical(concepts[lt[, "col"]], d$concept_a),
+            identical(concepts[lt[, "row"]], d$concept_b))
+}
+cat("\nPair order verified against R's dist() for all domains.\n")
+
+concept_check <- fp %>%
+  distinct(category, base_name) %>%
+  group_by(category) %>%
+  summarise(child = list(sort(base_name)), .groups = "drop") %>%
+  full_join(model_rdms %>%
+              group_by(category = domain) %>%
+              summarise(model = list(sort(unique(c(concept_a, concept_b)))),
+                        .groups = "drop"),
+            by = "category") %>%
+  rowwise() %>%
+  mutate(identical = identical(child, model),
+         only_child = paste(setdiff(child, model), collapse = ", "),
+         only_model = paste(setdiff(model, child), collapse = ", ")) %>%
+  ungroup()
+
+cat("\n--- concept lists: children vs models ---\n")
+concept_check %>% select(-child, -model) %>% print()
+usable <- concept_check %>% filter(identical) %>% pull(category)
+if (length(usable) < nrow(concept_check)) {
+  warning("Dropping domains whose concept lists do not match the RDMs.")
+}
+```
+
+# Step 2 — How much do the three models overlap?
+
+Read this before any result below. Where two references correlate highly with each other, neither has much unique variance left and the partition has little to work with. That is a property of the stimuli, not of the children.
+
+The relevant number is `r_perc_conc`. If it is high, these 12 concepts do not separate "looks alike" from "is alike" well enough to tell the two accounts apart — which would be a design finding for Study 1, not a null result.
+
+```{r}
+#| label: reference-overlap
+cat("--- correlations among the reference RDMs ---\n")
+model_rdms %>%
+  filter(domain %in% usable) %>%
+  group_by(domain) %>%
+  summarise(n_pairs = n(),
+            r_perc_hybr = round(safe_cor(perceptual, hybrid), 2),
+            r_perc_conc = round(safe_cor(perceptual, conceptual), 2),
+            r_conc_hybr = round(safe_cor(conceptual, hybrid), 2),
+            .groups = "drop") %>%
+  print()
+
+cat("\nNA in a conceptual column = that domain has no SPoSE vectors.\n")
+cat("r_perc_conc is the number that matters: the higher it is, the less\n")
+cat("unique variance either model has left, and the less this design can\n")
+cat("discriminate between them.\n")
+```
+
+# Step 3 — Fit every child to every model
+
+Spearman for the headline fit, because a child's placement distances have no reason to be linearly related to a cosine distance in an embedding space. Pearson is kept alongside because the variance partition needs it.
+
+```{r}
+#| label: model-fits
+fit_one <- function(dvec, mods) {
+  stopifnot(length(dvec) == nrow(mods))
+  d <- tibble(y = as.numeric(dvec), p = mods$perceptual,
+              h = mods$hybrid, k = mods$conceptual)
+  out <- tibble(rho_perceptual = cor(d$y, d$p, method = "spearman"),
+                rho_hybrid     = cor(d$y, d$h, method = "spearman"),
+                r_perceptual   = cor(d$y, d$p),
+                r_hybrid       = cor(d$y, d$h))
+  if (all(is.na(d$k))) {
+    return(out %>% mutate(rho_conceptual = NA_real_, r_conceptual = NA_real_,
+                          unique_perceptual = NA_real_,
+                          unique_conceptual = NA_real_, r2_full = NA_real_))
+  }
+  r2 <- function(f) summary(lm(f, data = d))$r.squared
+  rf <- r2(y ~ p + k); rp <- r2(y ~ p); rk <- r2(y ~ k)
+  out %>% mutate(rho_conceptual = cor(d$y, d$k, method = "spearman"),
+                 r_conceptual   = cor(d$y, d$k),
+                 unique_perceptual = rf - rk,
+                 unique_conceptual = rf - rp,
+                 r2_full = rf)
+}
+
+pdv_u <- pdv %>% filter(category %in% usable)
+
+fits <- pdv_u %>%
+  mutate(res = map2(dvec, category, function(v, dom) {
+    fit_one(v, model_rdms %>% filter(domain == dom) %>% arrange(pair_index))
+  })) %>%
+  select(-dvec) %>% unnest(res) %>%
+  inner_join(age_df, by = "participant_id") %>%
+  left_join(cons %>% select(participant_id, category, reliability = consistency),
+            by = c("participant_id", "category")) %>%
+  mutate(age_c = age - 6.5,
+         conceptual_share = if_else(
+           unique_perceptual + unique_conceptual > 1e-6,
+           unique_conceptual / (unique_perceptual + unique_conceptual),
+           NA_real_))
+
+cat("\n--- mean fit to each reference ---\n")
+fits %>%
+  group_by(category) %>%
+  summarise(n = n(),
+            across(c(rho_perceptual, rho_hybrid, rho_conceptual),
+                   ~ round(mean(.x, na.rm = TRUE), 3)), .groups = "drop") %>%
+  print()
+```
+
+# Step 4 — Comparison 1: is any model above chance?
+
+Permute the **concept labels** of the model RDM, not the elements of the distance vector. Shuffling elements destroys the matrix structure — real distance matrices obey the triangle inequality and share rows — and gives an anti-conservative null.
+
+`p_perm` is the fraction of relabelled RDMs that fit at least as well as the real one. This comparison is sound: it asks whether a model beats its own scrambled self, with the children held fixed.
+
+```{r}
+#| label: permutation
+perm_null <- function(dom, model_col) {
+  d <- model_rdms %>% filter(domain == dom) %>% arrange(pair_index)
+  v <- d[[model_col]]
+  if (all(is.na(v))) return(NULL)
+  concepts <- sort(unique(c(d$concept_a, d$concept_b)))
+  n <- length(concepts)
+  m <- matrix(0, n, n, dimnames = list(concepts, concepts))
+  ia <- match(d$concept_a, concepts); ib <- match(d$concept_b, concepts)
+  m[cbind(ia, ib)] <- v; m[cbind(ib, ia)] <- v
+
+  kids <- pdv_u %>% filter(category == dom) %>% pull(dvec)
+  obs <- mean(map_dbl(kids, ~ cor(.x, as.vector(as.dist(m)), method = "spearman")))
+  null <- replicate(N_PERM, {
+    p <- sample(n)
+    vp <- as.vector(as.dist(m[p, p]))
+    mean(map_dbl(kids, ~ cor(.x, vp, method = "spearman")))
+  })
+  tibble(domain = dom, model = model_col, observed = obs,
+         null_mean = mean(null), null_p95 = unname(quantile(null, .95)),
+         p_perm = (1 + sum(null >= obs)) / (N_PERM + 1))
+}
+
+cat("\n--- permutation test ---\n")
+perm_tbl <- expand_grid(dom = usable,
+                        mc = c("perceptual", "hybrid", "conceptual")) %>%
+  mutate(res = map2(dom, mc, perm_null)) %>%
+  pull(res) %>% purrr::compact() %>% bind_rows()
+perm_tbl %>% mutate(across(where(is.numeric), ~ round(.x, 4))) %>% show_all()
+```
+
+# Step 5 — Comparison 2: which model fits best, within a child?
+
+**The main result of this file.** For each child, does SPoSE beat DINOv2?
+
+This comparison is attenuation-free. A noisy child's correlations with *both* models are scaled down by the same sqrt(reliability) factor, so the factor cancels and the ordering survives however badly the child did the task. That is what makes it safe when the age analysis in Step 7 is not.
+
+```{r}
+#| label: within-child-ordering
+# For each child: does SPoSE beat DINOv2? `pct` is the percentage of children
+# for whom it does; `p` tests that against a coin flip.
+ordering <- fits %>%
+  filter(!is.na(rho_conceptual)) %>%
+  transmute(category,
+            conc_gt_perc = rho_conceptual > rho_perceptual,
+            conc_gt_hybr = rho_conceptual > rho_hybrid,
+            hybr_gt_perc = rho_hybrid     > rho_perceptual) %>%
+  pivot_longer(-category, names_to = "comparison", values_to = "win") %>%
+  group_by(category, comparison) %>%
+  summarise(k = sum(win), n = n(), pct = round(100 * mean(win), 1),
+            p = signif(binom.test(sum(win), n())$p.value, 3),
+            .groups = "drop")
+
+cat("--- which reference wins, within child ---\n")
+show_all(ordering)
+
+# Same question as a paired test on the correlations themselves, which uses
+# the size of each child's advantage rather than only its sign.
+cat("\n--- paired Wilcoxon on rho_conceptual - rho_perceptual ---\n")
+fits %>%
+  filter(!is.na(rho_conceptual)) %>%
+  group_by(category) %>%
+  summarise(n = n(),
+            median_diff = round(median(rho_conceptual - rho_perceptual), 3),
+            p = signif(wilcox.test(rho_conceptual, rho_perceptual,
+                                   paired = TRUE)$p.value, 3),
+            .groups = "drop") %>%
+  print()
+```
+
+# Step 6 — Is the raw fit just measuring reliability?
+
+The diagnostic that decides what you are allowed to report. If a child's fit to a model tracks their own test-retest consistency, the raw numbers are partly measuring who sat still.
+
+Expect `rel_vs_rho_*` to be substantial and positive. That is not a problem for Steps 4 and 5, which are within-child. It is fatal for Step 7.
+
+```{r}
+#| label: fit-vs-reliability
+cat("\n--- fit vs the child's own reliability ---\n")
+fits %>%
+  group_by(category) %>%
+  summarise(n = sum(!is.na(reliability)),
+            rel_vs_rho_perc = round(safe_cor(reliability, rho_perceptual), 2),
+            rel_vs_rho_conc = round(safe_cor(reliability, rho_conceptual), 2),
+            rel_vs_share    = round(safe_cor(reliability, conceptual_share), 2),
+            .groups = "drop") %>%
+  print()
+```
+
+# Step 7 — Comparison 3: does the balance shift with age? (confounded)
+
+**Do not report the numbers in this chunk.**
+
+Simulated at these reliabilities, these `r_pk` values and this n, with the true balance held CONSTANT across age, the per-child age slope still comes out at about **+.052/year** — the same size as the effect it is meant to detect. Five corrections were tested (reliability as a covariate, a cubic spline in reliability, reliability tertiles, a cross-trial noise-cancelling estimator) and none got the bias below +.038.
+
+Why: the share is a ratio of two small, noisy, non-negative quantities. At low reliability both are mostly noise, so the ratio collapses toward .5 by symmetry. Reliability rises with age, the collapse eases, and a positive slope appears from nothing. `E[A/B] != E[A]/E[B]`, so making the parts unbiased does not fix the ratio.
+
+This chunk is kept only so the biased number is visible next to the unbiased one in Step 8.
+
+```{r}
+#| label: age-perchild
+cat("\n--- per-child share, age slope (BIASED, for comparison only) ---\n")
+share_dat <- fits %>% filter(!is.na(conceptual_share))
+if (n_distinct(share_dat$category) > 1) {
+  m_sh <- lmer(conceptual_share ~ age_c * category + (1 | participant_id),
+               data = share_dat)
+  print(summary(emtrends(m_sh, ~ category, var = "age_c"), infer = TRUE))
+}
+cat("\nCompare against +.052/year, which is what this estimator reports when\n",
+    "nothing develops at all. Do not read these as a result.\n")
+```
+
+# Step 8 — The age question, done properly
+
+Average the correlations across children **first**, within an age band, and form the ratio afterwards. Both means carry the same sqrt(reliability) factor, which cancels exactly, and with \~20 children per band the plug-in bias is small.
+
+Simulated residual bias: **+.018** (animals), **+.010** (plants), while still recovering a real +.05/year effect as +.053 and +.049. The SE roughly doubles, so this will not detect a .05/year effect at this n — but it will not invent one either.
+
+Compare `slope` against `sim_bias`, not against zero.
+
+```{r}
+#| label: group-share
+#| cache: true
+rpk_tbl <- model_rdms %>%
+  filter(!is.na(conceptual), domain %in% usable) %>%
+  group_by(domain) %>%
+  summarise(r_pk = cor(perceptual, conceptual), .groups = "drop")
+
+share_from_r <- function(rp, rk, rpk) {
+  full <- (rp^2 + rk^2 - 2 * rp * rk * rpk) / (1 - rpk^2)
+  up <- full - rk^2
+  uk <- full - rp^2
+  if (!is.finite(up + uk) || abs(up + uk) <= 1e-9) return(NA_real_)
+  uk / (up + uk)
+}
+unique_perc <- function(rp, rk, rpk) {
+  (rp^2 + rk^2 - 2 * rp * rk * rpk) / (1 - rpk^2) - rk^2
+}
+
+dat_g <- fits %>%
+  filter(!is.na(r_conceptual)) %>%
+  inner_join(rpk_tbl, by = c("category" = "domain")) %>%
+  mutate(age_bin = floor(age))
+
+group_shares <- function(d) {
+  d %>%
+    group_by(category, age_bin) %>%
+    summarise(n = n(), rp = mean(r_perceptual), rk = mean(r_conceptual),
+              r_pk = first(r_pk), .groups = "drop") %>%
+    filter(n >= MIN_BIN_N) %>%
+    rowwise() %>%
+    mutate(u_perc = unique_perc(rp, rk, r_pk),
+           share  = share_from_r(rp, rk, r_pk)) %>%
+    ungroup()
+}
+
+gs <- group_shares(dat_g)
+
+cat("\n--- conceptual share by age band (GROUP-LEVEL) ---\n")
+gs %>% mutate(across(c(rp, rk, u_perc, share), ~ round(.x, 4))) %>%
+  show_all()
+cat("\nu_perc at or below zero means DINOv2 explains nothing the SPoSE\n",
+    "embedding does not already explain. If that holds at every age, the\n",
+    "share is pinned near 1 and there is no room for a shift to appear --\n",
+    "a fact about these 12 stimuli, not about the children.\n")
+
+wls_slope <- function(g) {
+  g <- g %>% filter(is.finite(share))
+  if (nrow(g) < 3 || sd(g$age_bin) == 0) return(NA_real_)
+  unname(coef(lm(share ~ age_bin, data = g, weights = g$n))[2])
+}
+
+obs_slope <- gs %>% group_by(category) %>%
+  group_modify(~ tibble(slope = wls_slope(.x))) %>% ungroup()
+
+strata <- dat_g %>% group_by(category, age_bin) %>% group_rows()
+boot_mat <- do.call(rbind, replicate(N_BOOT, {
+  idx <- unlist(lapply(strata, function(ix) sample(ix, length(ix), replace = TRUE)))
+  v <- group_shares(dat_g[idx, ]) %>%
+    group_by(category) %>% group_modify(~ tibble(s = wls_slope(.x))) %>%
+    ungroup()
+  setNames(v$s, v$category)[obs_slope$category]
+}, simplify = FALSE))
+
+cat("\n--- age slope on the group-level share ---\n")
+obs_slope %>%
+  mutate(se = apply(boot_mat, 2, sd, na.rm = TRUE),
+         lo = apply(boot_mat, 2, quantile, .025, na.rm = TRUE),
+         hi = apply(boot_mat, 2, quantile, .975, na.rm = TRUE),
+         sim_bias = if_else(category == "animals", 0.018, 0.010),
+         across(where(is.numeric), ~ round(.x, 4))) %>%
+  print()
+cat("\nCompare `slope` against `sim_bias`, not against zero. sim_bias is what\n",
+    "this estimator reports when the true balance does not change at all.\n")
+```
+
+# Step 9 — The figure that makes the argument
+
+The clearest diagnostic here, and the one for a talk. Pure attenuation multiplies **both** references by the same sqrt(reliability), so each line is anchored at the youngest band and drawn as it *would* look if only reliability changed. A line tracking its dashed curve is measurement noise. A line climbing above it is not.
+
+```{r}
+#| label: attenuation
+#| fig-width: 9
+#| fig-height: 4.5
+pred <- dat_g %>%
+  group_by(category, age_bin) %>%
+  summarise(perceptual = mean(r_perceptual), conceptual = mean(r_conceptual),
+            n = n(), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  pivot_longer(c(perceptual, conceptual), names_to = "model", values_to = "r") %>%
+  inner_join(rel_by_age %>% select(category, age_bin, att),
+             by = c("category", "age_bin")) %>%
+  group_by(category, model) %>%
+  arrange(age_bin, .by_group = TRUE) %>%
+  mutate(predicted = first(r) * att / first(att),
+         excess = r - predicted) %>%
+  ungroup()
+
+cat("\n--- observed vs attenuation-predicted fit ---\n")
+pred %>% mutate(across(c(att, r, predicted, excess), ~ round(.x, 3))) %>%
+  select(category, age_bin, n, model, att, observed = r, predicted, excess) %>%
+  show_all()
+cat("\n`excess` near zero at every age = that line is pure attenuation.\n")
+
+print(
+ggplot(pred, aes(age_bin, r, colour = model)) +
+  geom_hline(yintercept = 0, linetype = "dotted", colour = "grey60") +
+  geom_line(aes(y = predicted), linetype = "dashed", linewidth = 0.6) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.6) +
+  facet_wrap(~ category) +
+  scale_x_continuous(breaks = AGE_MIN:(AGE_MAX - 1)) +
+  scale_colour_manual(values = MODEL_COLS) +
+  labs(x = "Age (years)", y = "Mean fit to reference (Pearson r)", colour = NULL,
+       subtitle = "Dashed = what each line would do if ONLY reliability changed") +
+  theme(legend.position = "bottom")
+)
+```
+
+# Step 10 — Diagnostic pairs
+
+Does not use the partition at all. Within a domain, find the pairs where the two references disagree most, then ask how close children actually placed them. "Looks alike, conceptually distant" should be placed near by younger children and farther by older ones.
+
+Carries the same reliability confound as Step 7 — a noisier child has a smaller pair-type difference — so treat the age interaction as descriptive.
+
+```{r}
+#| label: diagnostic-pairs
+conc_domains <- model_rdms %>%
+  filter(domain %in% usable, !is.na(conceptual)) %>%
+  count(domain) %>% filter(n >= 10) %>% pull(domain)
+
+if (length(conc_domains)) {
+  diagnostic_pairs <- model_rdms %>%
+    filter(domain %in% conc_domains, !is.na(conceptual)) %>%
+    group_by(domain) %>%
+    mutate(gap = as.numeric(scale(conceptual)) - as.numeric(scale(perceptual)),
+           pair_type = case_when(
+             gap >= quantile(gap, .90) ~ "looks alike, conceptually distant",
+             gap <= quantile(gap, .10) ~ "conceptually close, looks different",
+             TRUE ~ NA_character_)) %>%
+    ungroup() %>%
+    filter(!is.na(pair_type)) %>%
+    mutate(pair_id = paste(domain, concept_a, concept_b, sep = "_"))
+
+  cat("\n--- diagnostic pairs (eyeball these; if they look wrong, the RDMs are) ---\n")
+  diagnostic_pairs %>% group_by(domain, pair_type) %>% slice_head(n = 4) %>%
+    ungroup() %>% select(domain, pair_type, concept_a, concept_b) %>%
+    show_all(n = 40)
+
+  child_pairs <- pdv_u %>%
+    mutate(pair_index = map(dvec, seq_along)) %>%
+    unnest(c(dvec, pair_index)) %>%
+    rename(placement_dist = dvec) %>%
+    group_by(participant_id, category) %>%
+    mutate(placement_z = as.numeric(scale(placement_dist))) %>%
+    ungroup() %>%
+    inner_join(diagnostic_pairs %>% select(domain, pair_index, pair_type, pair_id),
+               by = c("category" = "domain", "pair_index")) %>%
+    inner_join(age_df, by = "participant_id") %>%
+    mutate(age_c = age - 6.5, pair_type = factor(pair_type))
+
+  m_pairs <- lmer(placement_z ~ age_c * pair_type +
+                    (1 | participant_id) + (1 | pair_id), data = child_pairs)
+  cat("\n--- age x pair_type ---\n")
+  print(round(summary(m_pairs)$coefficients, 4))
+  print(summary(emtrends(m_pairs, ~ pair_type, var = "age_c"), infer = TRUE))
+  cat("\nNOTE: this test carries the SAME reliability confound. A noisier child\n",
+      "has a smaller pair-type difference, and reliability rises with age, so\n",
+      "the interaction grows with age even with no development. Treat it as\n",
+      "descriptive unless you can equate reliability across age.\n")
+} else {
+  cat("\n--- diagnostic-pair test skipped: no domain has a conceptual RDM ---\n")
+}
+```
+
+# Step 11 — The three comparisons, assembled
+
+```{r}
+#| label: summary
+summary_tbl <- bind_rows(
+  perm_tbl %>%
+    transmute(comparison = "1. above chance (permutation)",
+              domain, model,
+              value = round(observed, 3),
+              verdict = if_else(p_perm < .05, "yes", "no"),
+              sound = "yes — model vs its own scrambled self"),
+  fits %>%
+    filter(!is.na(rho_conceptual)) %>%
+    group_by(domain = category) %>%
+    summarise(k = sum(rho_conceptual > rho_perceptual), n = n(),
+              .groups = "drop") %>%
+    # binom.test is not vectorised, so one row at a time
+    rowwise() %>%
+    mutate(p = binom.test(k, n)$p.value) %>%
+    ungroup() %>%
+    transmute(comparison = "2. conceptual beats perceptual (within child)",
+              domain, model = "SPoSE vs DINOv2",
+              value = round(k / n, 3),
+              verdict = if_else(p < .05 & k / n > .5, "yes", "no"),
+              sound = "yes — attenuation cancels within child"),
+  obs_slope %>%
+    transmute(comparison = "3. balance shifts with age",
+              domain = category, model = "group-level share",
+              value = round(slope, 3),
+              verdict = if_else(slope > if_else(category == "animals",
+                                                0.018, 0.010) * 2,
+                                "maybe", "no"),
+              sound = "weak — compare against sim_bias, not zero")
+)
+
+show_all(summary_tbl)
+
+cat("\nComparisons 1 and 2 are the claims this pilot supports.\n")
+cat("Comparison 3 is not identified at this reliability; see Steps 7-9.\n")
+
+write_csv(summary_tbl, "model_comparison_summary.csv")
+write_csv(fits %>% select(-any_of("age_c")), "model_fits.csv")
+write_csv(perm_tbl, "model_perm.csv")
+write_csv(gs, "group_shares.csv")
+write_csv(pred, "attenuation_check.csv")
+```
