@@ -14,7 +14,9 @@ execute:
 editor: visual
 ---
 
-Descriptive structure, with no reference to adults or models. Every measure here is computed from the child's own data alone, so none of it depends on the cross-trial estimator and four-year-olds are included throughout.
+Descriptive structure, with no reference to adults or models. Every measure
+here is computed from the child's own data alone, so none of it depends on the
+cross-trial estimator and four-year-olds are included throughout.
 
 ```{r}
 #| label: setup
@@ -22,7 +24,7 @@ Descriptive structure, with no reference to adults or models. Every measure here
 # for every constant and helper used below.
 source(here::here("setup.R"))
 library(mclust); library(dendextend)
-library(lmerTest); library(broom); library(broom.mixed)
+library(lme4); library(lmerTest); library(broom); library(broom.mixed)
 theme_set(theme_minimal(base_size = 12))
 
 S <- readRDS("analysis_sample.rds")
@@ -49,7 +51,9 @@ cons %>% distinct(participant_id, age) %>%
 
 # Consistency
 
-Trial-to-trial Spearman correlation per child-domain. This is both the first developmental outcome and the ceiling every reference-based correlation in Part 2 is read against.
+Trial-to-trial Spearman correlation per child-domain. This is both the first
+developmental outcome and the ceiling every reference-based correlation in
+Part 2 is read against.
 
 ```{r}
 #| label: reliability
@@ -64,16 +68,47 @@ rel_tbl <- cons %>%
 
 rel_tbl %>% arrange(category, age_bin) %>% show_all()
 
+# Pooled across domains, with the attenuation ceiling each level implies for a
+# two-trial average. This is the table the reliability confound is argued from,
+# so it is reported rather than left to be reconstructed from the per-domain
+# rows above. The ceiling is sqrt of the Spearman-Brown value, which is
+# concave: a large proportional rise in reliability is a much smaller
+# proportional rise in the ceiling, and it is the ceiling that attenuates the
+# child-adult correlation.
+rel_by_age_pooled <- cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(age_bin) %>%
+  summarise(children = n_distinct(participant_id),
+            n_domains = n(),
+            mean_rel = mean(consistency),
+            ceiling = sqrt(sb(mean(consistency), 2)),
+            .groups = "drop")
+
+rel_by_age_pooled %>%
+  mutate(across(c(mean_rel, ceiling), ~ round(.x, 3))) %>% show_all()
+
+# How much of the age range's rise in observed similarity the ceiling alone
+# can account for: the factor the ceiling grows by over the corrected range.
+# Any raw growth beyond this factor is not explained by attenuation.
+rel_by_age_pooled %>%
+  filter(age_bin >= CORRECTED_AGE_MIN) %>%
+  summarise(from = min(age_bin), to = max(age_bin),
+            ceiling_factor = round(ceiling[which.max(age_bin)] /
+                                   ceiling[which.min(age_bin)], 3)) %>%
+  show_all()
+
+# Two-sided, which is the conservative choice: a reliably negative
+# consistency would be as informative as a positive one, and would mean
+# something is wrong rather than that children are inconsistent.
 cons %>%
   filter(!is.na(consistency)) %>%
   group_by(category) %>%
-  summarise(n = n(), mean_r = round(mean(consistency), 3),
-            # One-sided: the question is whether arrangements are repeatable
-            # at all, not whether they are anti-correlated.
-            t = round(t.test(consistency, mu = 0)$statistic, 2),
-            p = signif(t.test(consistency, mu = 0)$p.value, 3),
-            .groups = "drop") %>%
-  show_all()
+  summarise(tt = list(t.test(consistency, mu = 0)), .groups = "drop") %>%
+  mutate(n = map_int(tt, ~ .x$parameter + 1),
+         mean_r = round(map_dbl(tt, ~ unname(.x$estimate)), 3),
+         t = round(map_dbl(tt, ~ unname(.x$statistic)), 2),
+         p = signif(map_dbl(tt, "p.value"), 3)) %>%
+  select(-tt) %>% show_all()
 ```
 
 ```{r}
@@ -94,7 +129,7 @@ cons %>%
   filter(!is.na(consistency), !is.na(age_group)) %>%
   mutate(category = fct_domain(category)) %>%
   ggplot(aes(age_group, consistency, fill = category)) +
-  geom_boxplot(outlier.size = .6, alpha = 1) +
+  geom_boxplot(outlier.size = .6, alpha = .85) +
   scale_fill_manual(values = PALETTE) +
   labs(x = "age (years)", y = "trial-to-trial correlation",
        title = "Arrangement consistency by age")
@@ -120,7 +155,9 @@ cons %>%
 
 # Cluster agreement across trials
 
-Each trial's distance vector is cut into `K_CLUSTER` clusters and the two trials' partitions are compared. This asks whether a child imposes the same grouping twice, without reference to what the grouping should be.
+Each trial's distance vector is cut into `K_CLUSTER` clusters and the two
+trials' partitions are compared. This asks whether a child imposes the same
+grouping twice, without reference to what the grouping should be.
 
 ```{r}
 #| label: cluster-ari
@@ -157,7 +194,11 @@ cluster_ari %>%
 
 # Exemplar generalisation
 
-Only emotions has two photographs of each concept in a trial, so the within-concept distance exists there and nowhere else. It measures whether a child treats two different faces showing one emotion as belonging together. Scaled by the trial's mean distance, so children who used more or less of the arena are comparable.
+Only emotions has two photographs of each concept in a trial, so the
+within-concept distance exists there and nowhere else. It measures whether a
+child treats two different faces showing one emotion as belonging together.
+Scaled by the trial's mean distance, so children who used more or less of the
+arena are comparable.
 
 ```{r}
 #| label: exemplar-generalisation
@@ -201,7 +242,11 @@ if (nrow(within_tbl)) {
 
 # Between-child agreement
 
-Each child's averaged vector against the mean of the *other* children in the same age band, leave-one-out so no child is in its own reference. This rises if children converge on a shared structure. It is attenuated by reliability like any other correlation, so it is read descriptively and never used for an age slope.
+Each child's averaged vector against the mean of the *other* children in the
+same age band, leave-one-out so no child is in its own reference. This rises
+if children converge on a shared structure. It is attenuated by reliability
+like any other correlation, so it is read descriptively and never used for an
+age slope.
 
 ```{r}
 #| label: between-child
@@ -243,7 +288,9 @@ between_child %>%
 
 # Group dendrograms
 
-One tree per domain per age band, from the mean distance vector of the children in that cell. Average linkage throughout, so the trees are comparable to each other.
+One tree per domain per age band, from the mean distance vector of the
+children in that cell. Average linkage throughout, so the trees are
+comparable to each other.
 
 ```{r}
 #| label: dendrograms

@@ -544,6 +544,18 @@ ggplot(att, aes(age_bin, value, colour = estimate)) +
 ```
 
 ```{r}
+cons %>%
+  filter(!is.na(consistency)) %>%
+  group_by(age_bin) %>%
+  summarise(children = n_distinct(participant_id),
+            n_domains = n(),
+            mean_rel = round(mean(consistency), 3),
+            ceiling  = round(sqrt(sb(mean(consistency), 2)), 3),
+            .groups = "drop") %>%
+  show_all()
+```
+
+```{r}
 #| label: age-cell-detail
 # Everything that goes into one cell, so a non-monotone corrected estimate can
 # be read rather than guessed at. `naive_corr` is raw divided by the ceiling:
