@@ -1055,6 +1055,7 @@ const participant_info_trial = {
       });
 
       timeline.push(save_data);
+      timeline.push(save_local);
       timeline.push(finish_page);
 
       jsPsychInstance.finishTrial();
@@ -1379,9 +1380,15 @@ const timeline = [
 const save_data = {
   type: jsPsychPipe,
   action: "save",
-  experiment_id: "9j5Y0g2B4xWA",
-  filename: () => `${window.PARTICIPANT_ID}.csv`,
+  experiment_id: "rlHagSZERqmZ",
+  filename: () => `${window.PARTICIPANT_ID}_${Date.now()}.csv`,
   data_string: () => jsPsychInstance.data.get().csv()
+};
+
+const save_local = {
+  type: jsPsychCallFunction,
+  func: () => downloadCSV(`${window.PARTICIPANT_ID}_${Date.now()}.csv`,
+                          jsPsychInstance.data.get().values())
 };
 
 const finish_page = {
