@@ -1,0 +1,643 @@
+---
+title: "KidsNet Study 1 — What changes in the structure"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+editor: visual
+execute:
+  warning: false
+  message: false
+---
+
+A correlation says how much children's arrangements resemble adults'. It does not say what changes. This file describes the structure itself: how children group the concepts, how that compares with the adult grouping, and how much children agree with each other.
+
+Groups are formed with PAM and compared with ARI throughout. Trees (hierarchical clustering) are used only to draw dendrograms and tanglegrams.
+
+```{r}
+#| label: setup
+source(here::here("setup.R"))
+library(dendextend); library(cluster); library(lmerTest); library(broom)
+library(broom.mixed); library(emmeans)
+theme_set(theme_minimal(base_size = 12))
+
+S <- readRDS("analysis_sample.rds")
+fp <- S$children
+
+pdv <- participant_dist_vecs(fp) %>%
+  mutate(category = as.character(category)) %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins()
+```
+
+# Group arrangements
+
+```{r}
+#| label: group-trees
+# One mean arrangement per domain per age band, each child normalised first.
+groups <- pdv %>%
+  group_by(category, age_group) %>%
+  filter(n() >= MIN_BIN_N, n_distinct(lengths(dvec)) == 1) %>%
+  summarise(n = n(),
+            vec = list(reduce(map(dvec, norm_vec), `+`) / length(dvec)),
+            concepts = list(first(concepts)), .groups = "drop") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category, age_group)
+
+groups %>% select(category, age_group, n) %>% show_all()
+
+# Adult trees, keyed by plain character domain names. A factor passed to [[ ]]
+# indexes by position and silently fetches the wrong domain.
+adult_dends <- set_names(
+  map2(S$adult_ref$ref, S$adult_ref$concepts,
+       ~ as.dendrogram(hclust(as_dist_vec(.x, .y), method = LINKAGE))),
+  as.character(S$adult_ref$category))
+```
+
+Trees are only for looking at. They come from hierarchical clustering (average linkage), because PAM gives groups but no tree. Every tree is rotated toward the adult leaf order before it is drawn: rotation swaps the two branches at a node and never changes which concepts are grouped, so this only picks which of the equivalent drawings is shown, and it means the same concept sits at roughly the same height in every panel.
+
+# Agreement with the adult grouping
+
+Two separate steps. **PAM** (partitioning around medoids) forms the groups: given k, it picks k concepts as group centres (medoids) and assigns every other concept to the nearest one, choosing the medoids to make those distances as small as possible overall. **ARI** (adjusted Rand index) then compares a child's groups with the adults' groups: 1 means identical groups, 0 means no more overlap than chance. It ignores distances and group labels and asks only which concepts were put together.
+
+k is not set by hand. For each domain it is the number of groups that best fits the adult arrangement, by average silhouette width (how much closer each concept is to its own group than to the next nearest group). Every child is then grouped into the same number of groups as adults, so every child in a domain is compared against one fixed target.
+
+```{r}
+#| label: pam-helpers
+# pam_fit(), pam_cut(), sil_by_k(), best_k() and ari_vs() live in setup.R, so
+# 05_exemplar.qmd groups the same way. K_MAX is the largest k considered.
+K_MAX
+```
+
+```{r}
+#| label: adult-clusters
+# Set a number here to override the silhouette choice in every domain, e.g. 3.
+K_OVERRIDE <- NULL
+
+adult_pam <- S$adult_ref %>%
+  transmute(domain = as.character(category), ref, concepts,
+            sil = map2(ref, concepts, sil_by_k),
+            k = if (is.null(K_OVERRIDE)) map2_int(ref, concepts, best_k)
+                else as.integer(K_OVERRIDE),
+            fit = pmap(list(ref, concepts, k), pam_fit),
+            cut = map2(fit, concepts, ~ setNames(.x$clustering, .y)))
+
+# Silhouette by k: the chosen k is the highest value in each row.
+adult_pam %>%
+  select(domain, sil) %>% unnest(sil) %>%
+  mutate(sil = round(sil, 3)) %>%
+  pivot_wider(names_from = k, names_prefix = "k=", values_from = sil) %>%
+  show_all()
+
+# The adult groups at the chosen k, with each group's medoid first.
+adult_pam %>%
+  transmute(domain, k,
+            groups = map2_chr(fit, concepts, function(f, cs) {
+              cl <- setNames(f$clustering, cs)
+              paste(map_chr(seq_len(max(cl)), function(g) {
+                med <- f$medoids[g]
+                paste0("[", med, "] ",
+                       paste(setdiff(names(cl)[cl == g], med), collapse = " "))
+              }), collapse = "   |   ")
+            })) %>%
+  show_all()
+
+adult_k   <- set_names(adult_pam$k,   adult_pam$domain)
+adult_cut <- set_names(adult_pam$cut, adult_pam$domain)
+```
+
+```{r}
+#| label: cluster-agreement
+ari <- pdv %>%
+  filter(category %in% names(adult_cut)) %>%
+  mutate(ari = pmap_dbl(list(dvec, concepts, category), function(v, cs, dom)
+    ari_vs(v, cs, adult_cut[[dom]], adult_k[[dom]])))
+
+if (all(is.na(ari$ari))) stop("No ARI could be computed - children's ",
+  "concepts do not match the adult reference. Run 01_checks.qmd.")
+
+ari %>%
+  group_by(category = fct_domain(category), age_bin) %>%
+  summarise(n = n(), ari = round(mean(ari, na.rm = TRUE), 3), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  pivot_wider(names_from = age_bin, values_from = c(n, ari)) %>%
+  arrange(category) %>% show_all()
+
+a_dat <- ari %>% filter(!is.na(ari)) %>% mutate(category = fct_domain(category))
+
+lmer(ari ~ age_c + (1 | participant_id) + (1 | category), data = a_dat) %>%
+  tidy(effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+  select(term, estimate, std.error, conf.low, conf.high, statistic, df, p.value) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: cluster-agreement-domains
+# Does the rise differ across domains?
+ma_add <- lmer(ari ~ age_c + category + (1 | participant_id),
+               a_dat, REML = FALSE)
+ma_int <- lmer(ari ~ age_c * category + (1 | participant_id),
+               a_dat, REML = FALSE)
+
+anova(ma_add, ma_int)
+
+em_ari <- emtrends(ma_int, ~ category, var = "age_c")
+as_tibble(em_ari) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) %>% show_all()
+
+# Pairwise slope differences, unadjusted.
+as_tibble(pairs(em_ari, adjust = "none")) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+
+# The planned contrast: emotions against the mean of animals and plants.
+contrast(em_ari, list(emotions_vs_objects = c(-.5, -.5, 1))) %>%
+  as_tibble() %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: fig-ari
+#| fig-width: 9
+#| fig-height: 4.2
+# The twin of fig-development and fig-consistency: same function, same scales.
+p_ari <- plot_by_age(a_dat, "ari", "agreement with adult groups (ARI)")
+p_ari
+```
+
+## Checks on the choices
+
+Two choices could be doing the work: the number of groups, and the clustering method. Each check reruns the same model with one of them changed and reports the age slope. If the slopes are similar, the result does not depend on that choice.
+
+```{r}
+#| label: ari-checks
+slope_of <- function(dat) {
+  dat <- filter(dat, !is.na(ari))
+  m <- lmer(ari ~ age_c + (1 | participant_id) + (1 | category), data = dat)
+  tidy(m, effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+    filter(term == "age_c") %>%
+    transmute(slope = estimate, conf.low, conf.high, p = p.value)
+}
+
+# (a) Every domain cut at the same k, for k = 2 to 5, PAM on both sides.
+by_k <- map_dfr(2:5, function(k) {
+  cuts <- set_names(map2(adult_pam$ref, adult_pam$concepts,
+                         ~ pam_cut(.x, .y, min(k, length(.y) - 1))),
+                    adult_pam$domain)
+  pdv %>%
+    filter(category %in% names(cuts)) %>%
+    mutate(ari = pmap_dbl(list(dvec, concepts, category), function(v, cs, dom)
+      ari_vs(v, cs, cuts[[dom]], min(k, length(cs) - 1)))) %>%
+    slope_of() %>% mutate(version = paste0("PAM, k = ", k), .before = 1)
+})
+
+# (b) Hierarchical clustering instead of PAM, at the adult-chosen k.
+hc_cut <- function(v, cs, k)
+  setNames(cutree(hclust(as_dist_vec(v, cs), method = LINKAGE), k = k), cs)
+hc_adult <- set_names(pmap(list(adult_pam$ref, adult_pam$concepts, adult_pam$k),
+                           hc_cut), adult_pam$domain)
+hc <- pdv %>%
+  filter(category %in% names(hc_adult)) %>%
+  mutate(ari = pmap_dbl(list(dvec, concepts, category), function(v, cs, dom) {
+    if (length(v) != length(cs) * (length(cs) - 1) / 2) return(NA_real_)
+    mclust::adjustedRandIndex(hc_cut(v, cs, adult_k[[dom]]),
+                              hc_adult[[dom]][cs])
+  })) %>%
+  slope_of() %>% mutate(version = "hierarchical, adult k", .before = 1)
+
+bind_rows(slope_of(a_dat) %>% mutate(version = "PAM, adult k (main)", .before = 1),
+          by_k, hc) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+  show_all()
+```
+
+## Do younger children make more groups?
+
+The lab-meeting question. Here each child's own arrangement picks its own k, by the same silhouette rule used for adults. Silhouette cannot choose one group, so a child with no structure at all still gets k of at least 2.
+
+```{r}
+#| label: child-k
+child_k <- pdv %>%
+  filter(map_int(concepts, length) >= 4,
+         lengths(dvec) == map_int(concepts, ~ length(.x) * (length(.x) - 1) / 2)) %>%
+  mutate(k = map2_int(dvec, concepts, best_k),
+         category = fct_domain(category))
+
+child_k %>%
+  group_by(category, age_bin) %>%
+  summarise(n = n(), mean_k = round(mean(k), 2), .groups = "drop") %>%
+  filter(n >= MIN_BIN_N) %>%
+  pivot_wider(names_from = age_bin, values_from = c(n, mean_k)) %>%
+  show_all()
+
+cat("\nAdults' k:", paste(names(adult_k), adult_k, sep = " = ", collapse = ", "), "\n")
+
+lmer(k ~ age_c * category + (1 | participant_id), data = child_k) %>%
+  tidy(effects = "fixed") %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+# Youngest and oldest against adults
+
+The tanglegrams put each tree face to face with the adult tree and join each concept to itself, so crossings are disagreements. The adult tree is drawn the same way in every panel and only the child tree is rotated to match it, so the 4-year-old and 8-year-old panels can be compared directly.
+
+Entanglement scores those crossings: 0 is perfect alignment, higher is worse. A raw value means little on its own, so each is reported against two references:
+
+- **shuffled**: the same tree with the concept labels randomly reassigned, N_SHUFFLE times. That is what an unrelated tree of the same size scores, and it differs by domain because emotions has 6 concepts and the others 12.
+- **bootstrap**: the children in the band resampled with replacement and the group tree rebuilt, N_BOOT times. That gives an interval for each value and for the 4-vs-8 difference, which a single group tree cannot.
+
+```{r}
+#| label: entanglement-4-8
+set.seed(7)
+N_SHUFFLE <- 200
+N_BOOT    <- 200     # about 3 minutes in total; lower it while drafting
+
+ENDS <- as.character(c(AGE_MIN, AGE_MAX - 1))   # "4" and "8"
+
+# Rotate the child tree to match the fixed adult tree and score it.
+pair_with_adult <- function(v, cs, dom) {
+  da <- adult_dends[[dom]]
+  dc <- align_dend(as.dendrogram(hclust(as_dist_vec(v, cs), method = LINKAGE)),
+                   labels(da))
+  untangle(dendlist(dc, da), method = "step1side")
+}
+ent_of <- function(v, cs, dom) entanglement(pair_with_adult(v, cs, dom))
+
+group_vec <- function(dvecs) reduce(map(dvecs, norm_vec), `+`) / length(dvecs)
+
+ends <- pdv %>%
+  filter(as.character(age_group) %in% ENDS,
+         category %in% names(adult_dends)) %>%
+  group_by(category, age_group) %>%
+  filter(n_distinct(lengths(dvec)) == 1) %>%
+  summarise(n = n(), dvecs = list(dvec), concepts = list(first(concepts)),
+            .groups = "drop") %>%
+  mutate(age_group = as.character(age_group))
+
+ent_48 <- ends %>%
+  mutate(
+    real = pmap_dbl(list(dvecs, concepts, category),
+                    function(dv, cs, dom) ent_of(group_vec(dv), cs, dom)),
+    shuffled = pmap(list(dvecs, concepts, category), function(dv, cs, dom) {
+      v <- group_vec(dv)
+      map_dbl(seq_len(N_SHUFFLE), ~ ent_of(v, sample(cs), dom))
+    }),
+    boot = pmap(list(dvecs, concepts, category), function(dv, cs, dom)
+      map_dbl(seq_len(N_BOOT),
+              ~ ent_of(group_vec(sample(dv, replace = TRUE)), cs, dom))))
+
+ent_48 %>%
+  transmute(domain = fct_domain(category), age = age_group, n,
+            entanglement = real,
+            boot_low  = map_dbl(boot, ~ quantile(.x, .025)),
+            boot_high = map_dbl(boot, ~ quantile(.x, .975)),
+            shuffled = map_dbl(shuffled, mean),
+            # how many shuffled SDs better than an unrelated tree
+            z = (shuffled - real) / map_dbl(ent_48$shuffled, sd)) %>%
+  arrange(domain, age) %>%
+  mutate(across(where(is.numeric) & !n, ~ round(.x, 3))) %>%
+  show_all()
+
+# 4 minus 8: positive means the 8-year-old tree is better aligned with adults.
+# The two bands are resampled independently, so their draws pair at random.
+ent_48 %>%
+  select(category, age_group, real, boot) %>%
+  pivot_wider(names_from = age_group, values_from = c(real, boot)) %>%
+  transmute(domain = fct_domain(category),
+            difference = .data[[paste0("real_", ENDS[1])]] -
+                         .data[[paste0("real_", ENDS[2])]],
+            draws = map2(.data[[paste0("boot_", ENDS[1])]],
+                         .data[[paste0("boot_", ENDS[2])]], `-`),
+            low  = map_dbl(draws, ~ quantile(.x, .025)),
+            high = map_dbl(draws, ~ quantile(.x, .975)),
+            pct_draws_above_0 = map_dbl(draws, ~ 100 * mean(.x > 0))) %>%
+  select(-draws) %>%
+  arrange(domain) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  show_all()
+```
+
+The poster version of the tanglegrams: per domain, the 4-year-old tree on the left, the 8-year-old tree on the right, and the concept names between them in the adult order, boxed by adult group (PAM, at the adult k). Each line joins a concept in the child tree to its place in the adult order, so crossings are where children's grouping differs from adults'. Fewer crossings on the right than on the left is the developmental change.
+
+Lines are deliberately not coloured by "misgrouped" concepts. Every rule we tried had to cut the child tree into the adults' number of groups, and children spend their groups differently, so concepts they had paired correctly (cabbage and broccoli at age 4) were flagged as errors.
+
+```{r}
+#| label: fig-tangle-compact
+#| fig-width: 15
+#| fig-height: 6
+# "row": three domains side by side (wide, for a poster row).
+# "column": stacked (tall, for a poster column).
+TANGLE_LAYOUT <- "row"
+
+draw_tangle_compact <- function(domains = levels(groups$category),
+                                layout_dir = TANGLE_LAYOUT, cex = 1.15) {
+  domains <- intersect(as.character(domains), unique(ent_48$category))
+  nd <- length(domains)
+  # Every domain uses the row spacing of the largest one, so emotions (6
+  # concepts) is drawn half as tall instead of stretched.
+  n_max <- max(map_int(domains, ~ length(labels(adult_dends[[.x]]))))
+
+  # Five columns per domain: tree 4 | lines | names | lines | tree 8.
+  # A 0 in a layout matrix is an empty cell, used as the gap between domains.
+  w <- c(1, .5, .9, .5, 1); gap <- .3
+  if (layout_dir == "row") {
+    cells <- unlist(map(seq_len(nd), function(i)
+      c(if (i > 1) 0, (i - 1) * 5 + 1:5)))
+    layout(matrix(cells, nrow = 1),
+           widths = unlist(map(seq_len(nd), ~ c(if (.x > 1) gap, w))))
+  } else {
+    m <- do.call(rbind, map(seq_len(nd), function(i)
+      rbind(if (i > 1) rep(0, 5), (i - 1) * 5 + 1:5)))
+    layout(m, widths = w,
+           heights = unlist(map(seq_len(nd), ~ c(if (.x > 1) gap / 2, 1))))
+  }
+  op <- par(mar = c(.5, 0, 3.4, 0), oma = c(0, 1, 0, 1), xpd = NA)
+  on.exit({ par(op); layout(1) })
+
+  TREE <- "grey35"; BOX <- "grey93"
+
+  for (dom in domains) {
+    col <- PALETTE[[dom]]
+    da <- adult_dends[[dom]]
+    ord <- labels(da)                      # bottom to top, as drawn
+    n <- length(ord)
+    pad <- (n_max - n) / 2
+    ylim <- c(.5 - pad, n + .5 + pad)
+
+    # Rows occupied by each adult group, in the adult order.
+    g <- adult_cut[[dom]][ord]
+    runs <- rle(as.integer(g)); ends <- cumsum(runs$lengths)
+    starts <- ends - runs$lengths + 1
+
+    side <- function(a) {
+      row <- filter(ent_48, category == dom, age_group == a)
+      list(tree = pair_with_adult(group_vec(row$dvecs[[1]]),
+                                  row$concepts[[1]], dom)[[1]],
+           ent = row$real)
+    }
+    s4 <- side(ENDS[1]); s8 <- side(ENDS[2])
+
+    tree_plot <- function(tr, leaves_right) {
+      h <- attr(tr, "height")
+      tr <- set(set(tr, "branches_col", TREE), "branches_lwd", 1.8)
+      plot(tr, horiz = TRUE, leaflab = "none", axes = FALSE, yaxs = "i",
+           xaxs = "i", ylim = ylim,
+           xlim = if (leaves_right) c(h * 1.02, 0) else c(0, h * 1.02))
+    }
+    links <- function(tr, from_left) {
+      plot.new(); plot.window(c(0, 1), ylim, xaxs = "i", yaxs = "i")
+      y_tree <- match(ord, labels(tr)); y_mid <- seq_len(n)
+      x0 <- if (from_left) 0 else 1
+      segments(x0, y_tree, 1 - x0, y_mid, col = col, lwd = 2)
+    }
+    head_txt <- function(a, s) {
+      mtext(paste("age", a), side = 3, line = 1.5, cex = cex, font = 2,
+            col = "grey15")
+      mtext(sprintf("entanglement %.2f", s$ent), side = 3, line = .3,
+            cex = cex * .75, col = "grey40")
+    }
+
+    tree_plot(s4$tree, leaves_right = TRUE); head_txt(ENDS[1], s4)
+    links(s4$tree, from_left = TRUE)
+
+    # Middle column: names in adult order, one box per adult group.
+    plot.new(); plot.window(c(0, 1), ylim, xaxs = "i", yaxs = "i")
+    rect(0, starts - .44, 1, ends + .44, col = BOX, border = NA)
+    text(.5, seq_len(n), ord, cex = cex, col = "grey10")
+    mtext(dom, side = 3, line = 1.5, font = 2, cex = cex * 1.2, col = col)
+    mtext("adult groups", side = 3, line = .3, cex = cex * .75,
+          col = "grey40")
+
+    links(s8$tree, from_left = FALSE)
+    tree_plot(s8$tree, leaves_right = FALSE); head_txt(ENDS[2], s8)
+  }
+}
+draw_tangle_compact()
+```
+
+# Poster figure: 4-year-olds against adults and against 8-year-olds
+
+A 2 x 3 grid, one column per domain. Top row: the 4-year-old tree against the adult tree. Bottom row: the 4-year-old tree against the 8-year-old tree, a direct comparison of the youngest and oldest groups. Each cell is a tanglegram: left tree, labels, lines joining the same concept, labels, right tree. The right-hand tree is the reference; the left-hand tree is rotated to match it, which never changes what it groups together. The 8-year-old tree is itself first rotated toward the adult order, so it is drawn the way it lines up with adults.
+
+```{r}
+#| label: fig-tangle-grid
+#| fig-width: 14.5
+#| fig-height: 10
+#| fig-height: 12
+# Each row: c(left group, right group). "adults" = the adult reference tree.
+TANGLE_ROWS <- list(c(ENDS[1], ENDS[2]), c(ENDS[1], "adults"),
+                    c(ENDS[2], "adults"))
+
+# Full rotation: try every way of drawing `tree` (each internal node can
+# swap its two branches: 2^11 = 2048 drawings for 12 concepts) and keep the
+# one with the fewest crossing lines against the fixed `ref`. Ties go to the
+# drawing whose leaves sit closest to the reference positions. Rotation never
+# changes what the tree groups together.
+rotate_full <- function(tree, ref) {
+  leaf_orders <- function(d) {
+    if (is.leaf(d)) return(list(labels(d)))
+    a <- leaf_orders(d[[1]]); b <- leaf_orders(d[[2]])
+    out <- vector("list", 2 * length(a) * length(b)); k <- 0
+    for (x in a) for (y in b) {
+      out[[k + 1]] <- c(x, y); out[[k + 2]] <- c(y, x); k <- k + 2
+    }
+    out
+  }
+  target <- labels(ref)
+  score <- function(o) {
+    pos <- match(o, target)
+    crossings <- sum(outer(pos, pos, ">")[upper.tri(diag(length(pos)))])
+    crossings + sum(abs(pos - seq_along(pos))) / 1000   # tie-break
+  }
+  orders <- leaf_orders(tree)
+  best <- orders[[which.min(vapply(orders, score, numeric(1)))]]
+  dendextend::rotate(tree, best)
+}
+
+group_dend <- function(dom, who) {
+  if (who == "adults") return(adult_dends[[dom]])
+  row <- filter(ent_48, category == dom, age_group == who)
+  d <- as.dendrogram(hclust(as_dist_vec(group_vec(row$dvecs[[1]]),
+                                        row$concepts[[1]]), method = LINKAGE))
+  # Drawn the way it lines up best with adults.
+  rotate_full(d, adult_dends[[dom]])
+}
+
+draw_tangle_grid <- function(domains = levels(groups$category),
+                             rows = TANGLE_ROWS, cex = 1.05) {
+  domains <- intersect(as.character(domains), unique(ent_48$category))
+  nd <- length(domains); nr <- length(rows)
+  n_max <- max(map_int(domains, ~ length(labels(adult_dends[[.x]]))))
+  lab <- function(who) if (who == "adults") "adults" else paste("age", who)
+
+  # Per cell, five columns: left tree | labels | lines | labels | right tree.
+  w <- c(.8, .62, .38, .62, .8); gap <- .18
+  row_cells <- function(r) unlist(map(seq_len(nd), function(i)
+    c(if (i > 1) 0, (r - 1) * 5 * nd + (i - 1) * 5 + 1:5)))
+  layout(do.call(rbind, map(seq_len(nr), row_cells)),
+         widths = unlist(map(seq_len(nd), ~ c(if (.x > 1) gap, w))))
+  op <- par(mar = c(.3, 0, 3.6, 0), oma = c(0, 3.2, 0, 0), xpd = NA)
+  on.exit({ par(op); layout(1) })
+
+  for (ri in seq_len(nr)) {
+    left_who <- rows[[ri]][1]; right_who <- rows[[ri]][2]
+    for (dom in domains) {
+      col <- PALETTE[[dom]]
+      right <- group_dend(dom, right_who)
+      left <- rotate_full(group_dend(dom, left_who), right)
+      rord <- labels(right); lord <- labels(left)   # bottom to top
+      n <- length(rord)
+      pad <- (n_max - n) / 2
+      ylim <- c(.5 - pad, n + .5 + pad)
+
+      tree <- function(tr, tcol, leaves_right) {
+        h <- attr(tr, "height")
+        tr <- set(set(tr, "branches_col", tcol), "branches_lwd", 2.2)
+        plot(tr, horiz = TRUE, leaflab = "none", axes = FALSE, yaxs = "i",
+             xaxs = "i", ylim = ylim,
+             xlim = if (leaves_right) c(h * 1.02, 0) else c(0, h * 1.02))
+      }
+      labs <- function(txt, adj) {
+        plot.new(); plot.window(c(0, 1), ylim, xaxs = "i", yaxs = "i")
+        text(if (adj == 0) .04 else .96, seq_len(n), txt, adj = adj,
+             cex = cex * 1.25, col = "grey10")
+      }
+      tree_col <- function(who) if (who == "adults") "grey30" else col
+
+      tree(left, tree_col(left_who), leaves_right = TRUE)
+      if (dom == domains[1])
+        mtext(paste(lab(left_who), "vs.", lab(right_who)), side = 2,
+              line = .6, cex = cex * 1.25, font = 2, col = "grey15")
+      labs(lord, adj = 1)
+      mtext(lab(left_who), side = 3, line = .3, cex = cex * 1.25,
+            font = 2, col = "grey15")
+      plot.new(); plot.window(c(0, 1), ylim, xaxs = "i", yaxs = "i")
+      segments(0, seq_len(n), 1, match(lord, rord), col = col, lwd = 2)
+      if (ri == 1)
+        mtext(dom, side = 3, line = 1.7, font = 2, cex = cex * 1.35,
+              col = col)
+      labs(rord, adj = 0)
+      mtext(lab(right_who), side = 3, line = .3, cex = cex * 1.25,
+            font = 2, col = "grey15")
+      tree(right, tree_col(right_who), leaves_right = FALSE)
+    }
+  }
+}
+draw_tangle_grid()
+```
+
+# How similar are the age groups to each other?
+
+One mean arrangement per age band per domain, and the adult mean, each correlated with every other. Reading along the adults column gives the developmental result at group level; reading along a row shows whether neighbouring ages resemble each other more than distant ones do.
+
+This is computed on the mean *distances* themselves, not on trees built from them, so it does not inherit the jumpiness of the tree measures. It is still one value per cell: a group mean of 12 to 21 children is far smoother than any one child, so these correlations run much higher than the per-child similarities and should not be compared with them.
+
+```{r}
+#| label: age-matrix
+WHO_AGE <- c(as.character(AGE_MIN:(AGE_MAX - 1)), "adults")
+
+group_vecs <- bind_rows(
+  groups %>% transmute(category = as.character(category),
+                       who = as.character(age_group), n, vec, concepts),
+  S$adult_ref %>% transmute(category = as.character(category),
+                            who = "adults", n = n_adults,
+                            vec = ref, concepts))
+
+# Same concepts in the same order in every group, or the pairs do not line up.
+stopifnot(group_vecs %>% group_by(category) %>%
+            summarise(ok = n_distinct(map_chr(concepts, paste,
+                                              collapse = "|")) == 1) %>%
+            pull(ok) %>% all())
+
+age_matrix <- group_vecs %>%
+  group_by(category) %>%
+  group_modify(function(g, key) {
+    idx <- t(combn(nrow(g), 2))
+    tibble(a = g$who[idx[, 1]], b = g$who[idx[, 2]],
+           r = map2_dbl(idx[, 1], idx[, 2],
+                        ~ cor(g$vec[[.x]], g$vec[[.y]], method = "spearman")))
+  }) %>%
+  ungroup() %>%
+  # a is always the younger group of the pair
+  mutate(swap = match(a, WHO_AGE) > match(b, WHO_AGE),
+         younger = if_else(swap, b, a), older = if_else(swap, a, b),
+         category = fct_domain(category),
+         younger = factor(younger, levels = WHO_AGE),
+         older = factor(older, levels = WHO_AGE)) %>%
+  select(category, younger, older, r)
+
+age_matrix %>%
+  mutate(r = round(r, 2)) %>%
+  pivot_wider(names_from = older, values_from = r) %>%
+  show_all()
+```
+
+```{r}
+#| label: fig-age-matrix
+#| fig-width: 15
+#| fig-height: 5.6
+p_age_matrix <- age_matrix %>%
+  mutate(younger = fct_relabel(fct_drop(younger), ~ paste0("age ", .x)),
+         older = fct_relabel(fct_drop(older),
+                             ~ if_else(.x == "adults", "adults",
+                                       paste0("age ", .x)))) %>%
+  ggplot(aes(older, younger, fill = r)) +
+  geom_tile(colour = "white", linewidth = 1.5) +
+  geom_text(aes(label = sprintf("%.2f", r),
+                colour = r > .6), size = 6.2, show.legend = FALSE) +
+  facet_wrap(~ category) +
+  scale_fill_gradient2(low = "#B2182B", mid = "white", high = "#1B3A5C",
+                       midpoint = 0, limits = c(-1, 1), name = "r") +
+  scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "grey15")) +
+  coord_equal() +
+  labs(x = NULL, y = NULL) +
+  theme_poster(base_size = 20) +
+  theme(axis.line = element_blank(), axis.ticks = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = "right", legend.direction = "vertical",
+        legend.justification = "center",
+        legend.title = element_text(size = rel(.9)),
+        legend.key.height = grid::unit(40, "pt"))
+p_age_matrix
+```
+
+# Agreement with each other
+
+```{r}
+#| label: between-child
+# Each child against the mean of the others in the same age band and domain.
+between <- pdv %>%
+  group_by(category, age_bin) %>%
+  filter(n() >= MIN_BIN_N, n_distinct(lengths(dvec)) == 1) %>%
+  mutate(agree = {
+    tot <- reduce(dvec, `+`); k <- n()
+    map_dbl(seq_len(k), ~ cor(dvec[[.x]], (tot - dvec[[.x]]) / (k - 1),
+                              method = "spearman"))
+  }) %>%
+  ungroup()
+
+between %>%
+  group_by(category = fct_domain(category), age_bin) %>%
+  summarise(n = n(), agree = round(mean(agree), 3), .groups = "drop") %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+# Poster exports
+
+```{r}
+#| label: export-figs-structure
+dir.create("figs", showWarnings = FALSE)
+
+ggsave("figs/fig-ari.png", p_ari, width = 15.5, height = 6.2, dpi = 300)
+ggsave("figs/fig-age-matrix.png", p_age_matrix, width = 15, height = 5.6,
+       dpi = 300)
+
+png("figs/fig-tangle-grid.png", width = 14.5, height = 10, units = "in",
+    res = 300)
+draw_tangle_grid()
+dev.off()
+
+list.files("figs")
+```

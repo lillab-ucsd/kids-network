@@ -1,0 +1,553 @@
+---
+title: "KidsNet Study 1 — Development"
+author: "Junyi Chen"
+format:
+  html:
+    toc: true
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+Two things change with age, and they are hard to separate. Children's
+arrangements come to resemble adults' more closely, and children also become
+more consistent with themselves. A child who places pictures inconsistently
+cannot match the adult arrangement however well they understand the concepts,
+so some of the first change follows from the second. This file reports both,
+and reports how much of the first the second can account for.
+
+```{r}
+#| label: setup
+source(here::here("setup.R"))
+library(lmerTest); library(broom); library(broom.mixed); library(emmeans)
+library(mgcv)                       # linearity check only
+theme_set(theme_minimal(base_size = 12))
+
+S <- readRDS("analysis_sample.rds")
+fp <- S$children
+```
+
+```{r}
+#| label: measures
+#   consistency  the child's two arrangements against each other
+#   similarity   their average arrangement against the adult average
+refs <- set_names(S$adult_ref$ref, S$adult_ref$category)
+ref_concepts <- set_names(S$adult_ref$concepts, S$adult_ref$category)
+
+child_pdv <- participant_dist_vecs(fp) %>%
+  mutate(category = as.character(category))
+
+# Equal vector lengths is not enough: two different sets of twelve concepts
+# would correlate the wrong pairs without erroring. Compare the names.
+alignment <- child_pdv %>%
+  filter(category %in% names(ref_concepts)) %>%
+  distinct(category, concepts) %>%
+  mutate(matches_adults = map2_lgl(concepts, category,
+                                   ~ identical(.x, ref_concepts[[.y]])),
+         n_concepts = lengths(concepts)) %>%
+  select(category, n_concepts, matches_adults)
+
+show_all(alignment)
+stopifnot(nrow(alignment) > 0, all(alignment$matches_adults))
+
+similarity <- child_pdv %>%
+  filter(category %in% names(refs)) %>%
+  mutate(similarity = map2_dbl(dvec, category,
+                               ~ cor(.x, refs[[.y]], method = "spearman"))) %>%
+  select(participant_id, category, similarity)
+
+d <- S$consistency %>%
+  mutate(category = as.character(category)) %>%
+  select(participant_id, category, consistency) %>%
+  inner_join(similarity, by = c("participant_id", "category")) %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  mutate(category = fct_domain(category))
+
+tibble(n_children = n_distinct(d$participant_id), n_child_domains = nrow(d)) %>%
+  show_all()
+```
+
+The methods figure, built from one real child rather than drawn by hand. It
+stops where the measures start: an arrangement, the matrix it produces, and
+the two matrices compared. Replacing arrangement 2 with the adult average is
+the only difference between consistency and similarity.
+
+```{r}
+#| label: pipeline-candidates
+library(grid)   # base R; avoids a patchwork / ggrepel dependency
+
+DOM <- "animals"
+
+# What makes a good illustration, in order of importance:
+#   consistency  close to what children typically show, so panel 3 is honest
+#   similarity   the grouping is recognisable, so panel 1 reads as structure
+#   gap_ratio    closest pair relative to overall spread; small values mean
+#                two pictures sit on top of each other and their labels collide
+geom_stats <- fp %>%
+  filter(category == DOM) %>%
+  group_by(participant_id, trial) %>%
+  summarise(spread = mean(dist(cbind(posX, posY))),
+            min_gap = min(dist(cbind(posX, posY))), .groups = "drop") %>%
+  group_by(participant_id) %>%
+  slice_min(trial, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(participant_id, spread, min_gap)
+
+# The figure should show what the measure usually looks like, not its best
+# case. TARGET is the consistency the example child should have; NULL uses
+# the mean for this domain across all children.
+PIPELINE_TARGET <- NULL
+target_r <- if (!is.null(PIPELINE_TARGET)) PIPELINE_TARGET else
+  mean(d$consistency[d$category == DOM], na.rm = TRUE)
+cat("typical consistency in", DOM, ":", round(target_r, 3), "\n")
+
+candidates <- d %>%
+  filter(category == DOM, !is.na(consistency)) %>%
+  select(participant_id, age, similarity, consistency) %>%
+  inner_join(geom_stats, by = "participant_id") %>%
+  mutate(gap_ratio = min_gap / spread,
+         off_target = abs(consistency - target_r))
+
+# Closest to typical first. Pin any of these with PIPELINE_ID below.
+candidates %>%
+  mutate(across(c(similarity, consistency, gap_ratio, off_target),
+                ~ round(.x, 3)),
+         spread = round(spread)) %>%
+  select(-min_gap) %>%
+  arrange(off_target) %>%
+  head(15) %>%
+  show_all()
+```
+
+```{r}
+#| label: fig-pipeline
+#| fig-width: 16
+#| fig-height: 5.4
+# Set this to a participant_id from the table above to pin the figure.
+# NULL takes the child whose consistency is closest to the typical value,
+# among those with pictures far enough apart that the labels do not overlap.
+PIPELINE_ID <- NULL
+
+pick <- if (!is.null(PIPELINE_ID)) PIPELINE_ID else {
+  candidates %>%
+    filter(gap_ratio > 0.10) %>%
+    slice_min(off_target, n = 1, with_ties = FALSE) %>%
+    pull(participant_id)
+}
+stopifnot(length(pick) == 1)
+cat("pipeline figure uses participant:", pick, "\n")
+
+board <- filter(fp, participant_id == pick, category == DOM)
+tr <- sort(unique(board$trial))
+# A methods figure illustrates the procedure, not a domain, so it uses one
+# fixed blue rather than borrowing a colour from PALETTE.
+HUE <- "#2E6F8E"
+
+bare <- theme_poster(base_size = 20) +
+  theme(plot.subtitle = element_text(size = rel(1.2), face = "bold",
+                                     colour = "grey10",
+                                     margin = margin(b = 8)))
+
+# Labels are pushed radially outward from the centre of the board, so two
+# pictures sitting side by side get their names thrown in different
+# directions instead of on top of each other.
+b1 <- board %>%
+  filter(trial == tr[1]) %>%
+  mutate(ang = atan2(posY - mean(posY), posX - mean(posX)),
+         pad = 0.085 * max(diff(range(posX)), diff(range(posY))),
+         lx = posX + cos(ang) * pad,
+         ly = posY + sin(ang) * pad,
+         hj = 0.5 - 0.5 * cos(ang),
+         vj = 0.5 + 0.5 * sin(ang))
+
+p_board <- ggplot(b1, aes(posX, posY)) +
+  geom_point(size = 5.5, colour = HUE, alpha = .9) +
+  geom_text(aes(lx, ly, label = base_name, hjust = hj, vjust = vj),
+            size = 5.0, colour = "grey25") +
+  scale_y_reverse(expand = expansion(mult = .16)) +
+  scale_x_continuous(expand = expansion(mult = .16)) +
+  coord_equal(clip = "off") +
+  labs(x = NULL, y = NULL) +
+  bare +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(6, 22, 6, 22),
+        panel.border = element_rect(colour = "grey75", fill = NA))
+
+cd <- trial_concept_dists(filter(board, trial == tr[1]))
+p_mat <- as.matrix(as_dist_vec(cd$between, cd$concepts)) %>%
+  as.table() %>% as.data.frame(stringsAsFactors = FALSE) %>%
+  setNames(c("a", "b", "dist")) %>%
+  ggplot(aes(a, b, fill = dist)) +
+  geom_tile(colour = "white", linewidth = .4) +
+  scale_fill_gradient(low = "white", high = HUE, name = NULL) +
+  coord_equal() +
+  labs(x = NULL, y = NULL) +
+  bare +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1, size = rel(.8)),
+        axis.text.y = element_text(size = rel(.8)),
+        axis.line = element_blank(), axis.ticks = element_blank(),
+        legend.position = "none")
+
+v1 <- trial_concept_dists(filter(board, trial == tr[1]))$between
+v2 <- trial_concept_dists(filter(board, trial == tr[2]))$between
+p_cor <- tibble(t1 = v1, t2 = v2) %>%
+  ggplot(aes(t1, t2)) +
+  geom_smooth(method = "lm", se = FALSE, colour = "grey55", linewidth = 1.1) +
+  geom_point(size = 4.2, alpha = .65, colour = HUE) +
+  annotate("text", x = -Inf, y = Inf, hjust = -0.06, vjust = 1.5,
+           label = paste0("r = ", sprintf("%.2f",
+                          cor(v1, v2, method = "spearman"))),
+           size = 8, fontface = "bold", colour = "grey10") +
+  scale_y_continuous(expand = expansion(mult = c(.05, .16))) +
+  labs(x = "distance, arrangement 1", y = "distance, arrangement 2") +
+  bare
+
+# Panel titles are drawn in their own row above the plots, not as ggplot
+# subtitles, so all three sit on the same line. (As subtitles they followed
+# each plot's own panel, and the square panels pushed them to different
+# heights.)
+PIPELINE_TITLES <- c("One arrangement",
+                     "Pairwise distance matrix",
+                     "Within-participant correlation\nfor two arrangements")
+PIPELINE_TITLE_SIZE <- 22   # points
+
+draw_pipeline <- function() {
+  grid.newpage()
+  # Title row height follows the font size and the longest title's number
+  # of lines, so a two-line title never runs into the plot below it.
+  n_lines <- max(lengths(strsplit(PIPELINE_TITLES, "\n")))
+  title_h <- n_lines * PIPELINE_TITLE_SIZE * 1.15 + PIPELINE_TITLE_SIZE
+  pushViewport(viewport(layout = grid.layout(
+    2, 3, heights = unit(c(title_h, 1), c("points", "null")))))
+  for (i in 1:3) {
+    pushViewport(viewport(layout.pos.row = 1, layout.pos.col = i))
+    grid.text(PIPELINE_TITLES[i],
+              y = unit(1, "npc") - unit(PIPELINE_TITLE_SIZE * .4, "points"),
+              vjust = 1, gp = gpar(fontsize = PIPELINE_TITLE_SIZE,
+                                   fontface = "bold", col = "grey10",
+                                   lineheight = .95))
+    popViewport()
+  }
+  print(p_board, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
+  print(p_mat,   vp = viewport(layout.pos.row = 2, layout.pos.col = 2))
+  print(p_cor,   vp = viewport(layout.pos.row = 2, layout.pos.col = 3))
+  popViewport()
+}
+draw_pipeline()
+```
+
+
+# Do children do the task consistently?
+
+```{r}
+#| label: consistency
+# Two-sided: a reliably negative value would mean something is wrong.
+d %>%
+  filter(!is.na(consistency)) %>%
+  group_by(category) %>%
+  summarise(tt = list(t.test(consistency, mu = 0)), .groups = "drop") %>%
+  mutate(n = map_int(tt, ~ .x$parameter + 1L),
+         mean_r = round(map_dbl(tt, ~ unname(.x$estimate)), 3),
+         t = round(map_dbl(tt, ~ unname(.x$statistic)), 2),
+         p = signif(map_dbl(tt, "p.value"), 3)) %>%
+  select(-tt) %>% show_all()
+```
+
+```{r}
+#| label: consistency-age
+lmer(consistency ~ age_c + (1 | participant_id) + (1 | category),
+     data = filter(d, !is.na(consistency))) %>%
+  # Wald rather than profile likelihood: same answer here, far faster.
+  tidy(effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+  select(term, estimate, std.error, conf.low, conf.high, statistic, df, p.value) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: consistency-table
+d %>%
+  filter(!is.na(consistency)) %>%
+  group_by(age_bin) %>%
+  summarise(n_children = n_distinct(participant_id),
+            mean_consistency = mean(consistency),
+            .groups = "drop") %>%
+  mutate(ceiling = ceiling_from(mean_consistency),
+         across(c(mean_consistency, ceiling), ~ round(.x, 3))) %>%
+  show_all()
+```
+
+Consistency rises steeply between four and six and then levels off. The
+ceiling column is the highest correlation with the adult arrangement a child
+of that consistency could reach. It rises much less steeply than consistency
+itself, because the relationship is concave: doubling a low reliability moves
+the ceiling a long way, doubling an already decent one barely moves it.
+
+# Do children's arrangements come to resemble adults'?
+
+```{r}
+#| label: similarity-age
+lmer(similarity ~ age_c + (1 | participant_id) + (1 | category), data = d) %>%
+  # Wald rather than profile likelihood: same answer here, far faster.
+  tidy(effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+  select(term, estimate, std.error, conf.low, conf.high, statistic, df, p.value) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+```{r}
+#| label: similarity-table
+cells <- d %>%
+  group_by(category, age_bin) %>%
+  # con_se before the means: a new `consistency` column is visible to every
+  # argument after it, so sd() would see the mean rather than the column.
+  summarise(n_sim = sum(!is.na(similarity)),
+            n_con = sum(!is.na(consistency)),
+            con_se = sd(consistency, na.rm = TRUE) / sqrt(sum(!is.na(consistency))),
+            similarity = mean(similarity, na.rm = TRUE),
+            consistency = mean(consistency, na.rm = TRUE),
+            .groups = "drop") %>%
+  filter(n_sim >= MIN_BIN_N) %>%
+  # sqrt(Spearman-Brown) has infinite slope at zero, so a cell whose
+  # reliability is indistinguishable from zero has no usable ceiling.
+  mutate(
+    reliable = consistency > 2 * con_se,
+    ceiling = if_else(reliable, ceiling_from(consistency), NA_real_),
+    pct_of_ceiling = 100 * similarity / ceiling,
+    category = fct_domain(category))
+
+# Cells with no measurable reliability.
+unreliable <- cells %>% filter(!reliable) %>%
+  select(category, age_bin, n_con, similarity, consistency, con_se)
+
+if (nrow(unreliable)) show_all(unreliable) else
+  cat("Every cell has reliability distinguishable from zero.\n")
+
+cells %>%
+  select(category, age_bin, n = n_sim, similarity, consistency,
+         ceiling, pct_of_ceiling) %>%
+  mutate(across(c(similarity, consistency, ceiling), ~ round(.x, 3)),
+         pct_of_ceiling = round(pct_of_ceiling, 1)) %>%
+  arrange(category, age_bin) %>% show_all()
+```
+
+```{r}
+#| label: consistency-domains
+# The pooled model averages a steep rise in the object domains with a flat
+# line in emotions.
+c_dat <- filter(d, !is.na(consistency))
+mc_add <- lmer(consistency ~ age_c + category + (1 | participant_id),
+               c_dat, REML = FALSE)
+mc_int <- lmer(consistency ~ age_c * category + (1 | participant_id),
+               c_dat, REML = FALSE)
+
+anova(mc_add, mc_int)
+
+em_con <- emtrends(mc_int, ~ category, var = "age_c")
+as_tibble(em_con) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) %>% show_all()
+
+# Pairwise slope differences, unadjusted (see the domains chunk).
+as_tibble(pairs(em_con, adjust = "none")) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+
+contrast(em_con, list(emotions_vs_objects = c(-.5, -.5, 1))) %>%
+  as_tibble() %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+# How much of that is consistency?
+
+The direct version of the question: does the age effect survive holding
+consistency fixed? Both models are fitted on the same rows, since adding
+consistency as a predictor drops the children who have no consistency score
+and would otherwise shrink the sample as well as change the model.
+
+Consistency is part of what develops, not a nuisance variable, so this is a
+robustness check and not the model to report as the main result. If age
+survives it, the rise in similarity is not merely children becoming easier to
+measure.
+
+```{r}
+#| label: control-consistency
+cc <- filter(d, !is.na(consistency), !is.na(similarity))
+
+cat("children x domains:", nrow(cc), " similarity-consistency r =",
+    round(cor(cc$similarity, cc$consistency, method = "spearman"), 3), "\n\n")
+
+m_base <- lmer(similarity ~ age_c + (1 | participant_id) + (1 | category), cc)
+m_ctrl <- lmer(similarity ~ age_c + consistency +
+                 (1 | participant_id) + (1 | category), cc)
+
+bind_rows(
+  tidy(m_base, effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+    mutate(model = "age only"),
+  tidy(m_ctrl, effects = "fixed", conf.int = TRUE, conf.method = "Wald") %>%
+    mutate(model = "age + consistency")) %>%
+  filter(term != "(Intercept)") %>%
+  select(model, term, estimate, std.error, conf.low, conf.high,
+         statistic, df, p.value) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+```
+
+# Does it differ by domain?
+
+```{r}
+#| label: domains
+m_add <- lmer(similarity ~ age_c + category + (1 | participant_id),
+              data = d, REML = FALSE)
+m_int <- lmer(similarity ~ age_c * category + (1 | participant_id),
+              data = d, REML = FALSE)
+
+anova(m_add, m_int)
+
+em_sim <- emtrends(m_int, ~ category, var = "age_c")
+as_tibble(em_sim) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) %>% show_all()
+
+# Each domain's slope against each other's. Unadjusted, so the emotions rows
+# test the same thing as the emotions x animals and emotions x plants
+# interaction terms of m_int.
+as_tibble(pairs(em_sim, adjust = "none")) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+
+# The planned contrast: emotions against the mean of animals and plants, one
+# test instead of three. Weights follow the domain order animals, plants,
+# emotions.
+contrast(em_sim, list(emotions_vs_objects = c(-.5, -.5, 1))) %>%
+  as_tibble() %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3))) %>% show_all()
+
+# Change across the full age range, from the unrounded cell means. `cells`
+# stores full precision; only its printed copy is rounded, so subtracting the
+# displayed values can land on a rounding boundary.
+cells %>%
+  group_by(category) %>%
+  summarise(age_from = min(age_bin), age_to = max(age_bin),
+            sim_from = similarity[which.min(age_bin)],
+            sim_to   = similarity[which.max(age_bin)],
+            .groups = "drop") %>%
+  mutate(change = round(sim_to - sim_from, 3),
+         across(c(sim_from, sim_to), ~ round(.x, 3))) %>%
+  show_all()
+```
+
+The earlier analysis of this dataset used Pearson correlations and reported an
+age x domain interaction. This pipeline uses Spearman throughout and does not.
+Fitting both on the same children separates the method change from the extra
+participants.
+
+```{r}
+#| label: pearson-check
+sim_both <- child_pdv %>%
+  filter(category %in% names(refs)) %>%
+  mutate(spearman = map2_dbl(dvec, category,
+                             ~ cor(.x, refs[[.y]], method = "spearman")),
+         pearson  = map2_dbl(dvec, category,
+                             ~ cor(.x, refs[[.y]], method = "pearson"))) %>%
+  select(participant_id, category, spearman, pearson) %>%
+  inner_join(S$age, by = "participant_id") %>%
+  add_age_bins() %>%
+  mutate(category = fct_domain(category))
+
+cat("agreement between the two measures: r =",
+    round(cor(sim_both$spearman, sim_both$pearson), 3), "\n")
+
+fit_pair <- function(dd, yname) {
+  dd <- mutate(dd, y = .data[[yname]])
+  m_a <- lmer(y ~ age_c + category + (1 | participant_id), dd, REML = FALSE)
+  m_i <- lmer(y ~ age_c * category + (1 | participant_id), dd, REML = FALSE)
+  cat("\n---", yname, "---\n")
+  print(anova(m_a, m_i))
+  as_tibble(emtrends(m_i, ~ category, var = "age_c")) %>%
+    mutate(across(where(is.numeric), ~ round(.x, 4))) %>% show_all()
+}
+
+walk(c("spearman", "pearson"), ~ fit_pair(sim_both, .x))
+```
+
+```{r}
+#| label: fig-development
+#| fig-width: 9
+#| fig-height: 4.2
+# One panel per domain: by-age means (+/- 1 SE) over that domain's linear
+# fit. facet = FALSE puts all three in one graph. The per-child scatter is gone: plot_by_age(..., raw = TRUE) puts it back for a talk.
+p_dev <- plot_by_age(d, "similarity", "similarity to adults (r)")
+p_dev
+```
+
+```{r}
+#| label: fig-consistency
+#| fig-width: 9
+#| fig-height: 4.2
+# Deliberately the twin of fig-development: same function, same scales, same
+# colours. Side by side the contrast is the finding - the similarity lines
+# rise together, the consistency line for emotions does not.
+p_con <- plot_by_age(d, "consistency", "test-retest consistency (r)")
+p_con
+```
+
+```{r}
+#| label: linearity
+# The models above are linear in age. An effective degrees of freedom near 1
+# means that is adequate; much above 1 means a straight line is averaging over
+# real curvature.
+d %>%
+  group_by(category) %>%
+  nest() %>%
+  mutate(out = map(data, ~ tibble(
+    n = nrow(.x),
+    gam_edf = round(summary(gam(similarity ~ s(age, k = 5), data = .x,
+                                method = "REML"))$s.table[1, "edf"], 2),
+    quad_p = signif(anova(lm(similarity ~ age, .x),
+                          lm(similarity ~ poly(age, 2), .x))$`Pr(>F)`[2], 3)))) %>%
+  select(-data) %>% unnest(out) %>% ungroup() %>% show_all()
+```
+
+# Emotions
+
+Emotions differs from the object domains on three things at once, which is
+worth stating before any of its results are interpreted developmentally: six
+concepts rather than twelve, lower consistency in children, and much weaker
+agreement among adults about what the structure should be.
+
+```{r}
+#| label: emotions-context
+d %>%
+  mutate(category = as.character(category)) %>%
+  group_by(category) %>%
+  summarise(child_consistency = round(mean(consistency, na.rm = TRUE), 3),
+            .groups = "drop") %>%
+  left_join(S$adult_agreement %>%
+              mutate(category = as.character(category)) %>%
+              select(category, adult_pairwise = pairwise, adult_loo = loo),
+            by = "category") %>%
+  left_join(S$adult_ref %>%
+              transmute(category, n_pairs = lengths(ref)),
+            by = "category") %>%
+  mutate(category = fct_domain(category)) %>%
+  arrange(category) %>% show_all()
+```
+
+# Poster exports
+
+```{r}
+#| label: export-figs
+# ggsave() with no `plot =` writes last_plot(), which is whatever was printed
+# most recently - not necessarily the figure named in the filename. Always
+# pass the object.
+dir.create("figs", showWarnings = FALSE)
+
+ggsave("figs/fig-development.png", p_dev, width = 15.5, height = 6.2, dpi = 300)
+ggsave("figs/fig-consistency.png", p_con, width = 15.5, height = 6.2, dpi = 300)
+
+png("figs/fig-pipeline.png", width = 15.38, height = 6.0, units = "in", res = 300)
+draw_pipeline()
+dev.off()
+
+list.files("figs")
+```
